@@ -161,8 +161,9 @@ def to_number(value: str) -> float | None:
 
 
 def rule_flag(rule_name: str, message: str, line: str = "") -> None:
-    if line:
-        print(f"[RULE FLAG] {rule_name}: {message} | LINE: {line}")
+    safe_line = line.encode("ascii", "replace").decode() if line else ""
+    if safe_line:
+        print(f"[RULE FLAG] {rule_name}: {message} | LINE: {safe_line}")
     else:
         print(f"[RULE FLAG] {rule_name}: {message}")
 

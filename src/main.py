@@ -136,9 +136,9 @@ def main():
         _apply_extractor_results(yacht, machinery,  page_num, "machinery",  conflicts)
 
     if conflicts:
-        print(f"\nConflicts found (first value kept — see below for what was ignored):")
+        print(f"\nConflicts found (first value kept \u2014 see below for what was ignored):")
         for line in conflicts:
-            print(line)
+            print(line.encode("ascii", "replace").decode())
         print()
 
     normalized_data = apply_normalization_rules(yacht.model_dump())
