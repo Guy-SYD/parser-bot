@@ -1,0 +1,371 @@
+"""
+categorize_sections.py
+
+Takes raw equipment section lines (from extract_sections) and organises them
+into predefined category buckets for each section type.
+
+Returns:  dict[section_key, list[tuple[category_name, list[lines]]]]
+
+Each section becomes a list of (category_name, [lines]) pairs in display order.
+Categories with no content are omitted. The special REFIT HISTORY section is
+grouped by year rather than by keyword category.
+"""
+
+import re
+from difflib import SequenceMatcher
+
+# ---------------------------------------------------------------------------
+# Deduplication helpers
+# ---------------------------------------------------------------------------
+
+def _strip_label_prefix(line: str) -> str:
+    """
+    Remove a leading 'Label: ' prefix so that
+    'Tenders: 16.6 ft Williams 505' and '16.6 ft Williams 505'
+    compare as the same content.
+    Only strips if the label is ≤ 30 chars (avoids stripping real content).
+    """
+    m = re.match(r'^[^:]{1,30}:\s+(.+)$', line.strip())
+    return m.group(1).strip() if m else line.strip()
+
+
+def _norm(line: str) -> str:
+    return re.sub(r'\s+', ' ', _strip_label_prefix(line).lower())
+
+
+def _is_near_duplicate(a: str, b: str, threshold: float = 0.65) -> bool:
+    """Return True if a and b are substantially the same content."""
+    na, nb = _norm(a), _norm(b)
+    if na == nb:
+        return True
+    # One is a substring of the other
+    if na in nb or nb in na:
+        return True
+    # Key words of the shorter overlap heavily with the longer
+    short, long = (na, nb) if len(na) <= len(nb) else (nb, na)
+    short_words = set(short.split())
+    long_words = set(long.split())
+    # Ignore very common short words
+    stop = {'the', 'a', 'an', 'of', 'and', 'in', 'on', 'at', 'to', 'x', 'ft', 'm'}
+    content_words = short_words - stop
+    if content_words and len(content_words) >= 2:
+        overlap = len(content_words & long_words) / len(content_words)
+        if overlap >= 0.75:
+            return True
+    ratio = SequenceMatcher(None, na, nb).ratio()
+    return ratio >= threshold
+
+
+_BARE_LABEL_RE = re.compile(r'^[^:]{1,30}:\s*$')
+
+
+def _is_bare_label(line: str) -> bool:
+    """Return True for lines like 'Cooking Equipment:' with nothing after the colon."""
+    return bool(_BARE_LABEL_RE.match(line.strip()))
+
+
+def _dedup_bucket(lines: list[str]) -> list[str]:
+    """
+    Remove near-duplicate lines from a bucket and strip bare sub-header labels
+    (e.g. 'Cooking Equipment:', 'Main Laundry Equipment:') that add no value
+    once items are already sorted into category buckets.
+    When two lines are near-duplicates, keep the longer one (more detail).
+    """
+    kept: list[str] = []
+    for line in lines:
+        # Drop bare 'Label:' lines — they're PDF sub-headers, not content
+        if _is_bare_label(line):
+            continue
+        duplicate = False
+        for i, existing in enumerate(kept):
+            if _is_near_duplicate(line, existing):
+                if len(line) > len(existing):
+                    kept[i] = line
+                duplicate = True
+                break
+        if not duplicate:
+            kept.append(line)
+    return kept
+
+
+# ---------------------------------------------------------------------------
+# Category definitions — list of (category_name, [keywords])
+# A line is assigned to the first category where any keyword matches.
+# The last entry in each list is the catch-all (empty keyword list).
+# ---------------------------------------------------------------------------
+
+ACCOMMODATION_CATEGORIES = [
+    ("Saloon",              ["saloon", "salon", "sky lounge", "skylounge", "sitting area", "seating area",
+                             "lounge", "bar to starboard", "wet bar", "circular bar", "fireplace",
+                             "entertainment area", "living area", "tv and surround"]),
+    ("Dining",              ["dining", "formal dining", "dinner table", "dining area"]),
+    ("Master Stateroom",    ["master", "owner's suite", "owner suite", "full-beam suite", "full beam suite",
+                             "master suite", "master cabin", "owners cabin", "owner cabin"]),
+    ("VIP Stateroom",       ["vip stateroom", "vip suite", "vip cabin"]),
+    ("Guest Staterooms",    ["guest stateroom", "guest suite", "guest cabin", "double stateroom",
+                             "twin stateroom", "pullman", "guest accommodation", "guest room",
+                             "stateroom on lower", "lower deck stateroom"]),
+    ("Captain's Cabin",     ["captain", "pilothouse", "pilot house", "bridge deck cabin"]),
+    ("Crew Quarters",       ["crew", "engineer cabin", "crew mess", "crew area", "crew accommodation",
+                             "crew cabin", "crew stateroom"]),
+    ("Hallways & Stairways",["hallway", "stairway", "staircase", "landing", "corridor", "passage",
+                             "foyer", "formal entry", "entrance", "lobby"]),
+    ("Sundeck",             ["sundeck", "sun deck"]),
+    ("Other",               []),
+]
+
+GALLEY_CATEGORIES = [
+    ("Galley",              ["galley", "oven", "fridge", "freezer", "cooking", "dishwasher",
+                             "sink", "blender", "mixer", "ice maker", "hob", "induction",
+                             "refriger", "combi", "microwave", "pizza", "teppanyaki",
+                             "extractor", "macerator", "walk-in fridge", "sub-zero",
+                             "pacojet", "vitamix", "kitchenaid", "gaggenau", "miele",
+                             "zanussi", "bosch", "plancher", "true t-", "macerator"]),
+    ("Pantry & Bar",        ["pantry", "wine cellar", "wine cooler", "eurocave",
+                             "drinks fridge", "bottle", "bar ", "beverage"]),
+    ("Laundry",             ["laundry", "washing machine", "washer", "dryer", "tumble",
+                             "pw6065", "pt 7135"]),
+    ("Other",               []),
+]
+
+COMMUNICATION_CATEGORIES = [
+    ("Satcom",              ["sat com", "satcom", "felcom", "gmdss", "sailor rt", "iridium",
+                             "thrane", "vsat", "starlink", "meridian", "5g dome", "lars thrane"]),
+    ("VHF",                 ["vhf", " uhf"]),
+    ("SSB",                 ["ssb", "mf/hf", "hf radio", "sailor ssb", "sailor 5000"]),
+    ("Navtex",              ["navtex"]),
+    ("Telephone & Intercom",["telephone", "phone", "pbx", "intercom", "panasonic", "siemens",
+                             "voip", "open stage"]),
+    ("Internet & Connectivity", ["wifi", "wi-fi", "internet", "4g", "5g", "lte", "gsm", "cellular"]),
+    ("Other",               []),
+]
+
+NAVIGATION_CATEGORIES = [
+    ("Radar",               ["radar"]),
+    ("Chart Plotter / MFD", ["chart plotter", "chartplotter", "plotter", "maxsea", "navnet",
+                             "mfdbb", "mfd"]),
+    ("GPS",                 ["gps", "dgps", "gpsmap", "gp-", "gp 1"]),
+    ("AIS",                 ["ais", " transponder"]),
+    ("ECDIS",               ["ecdis", "electronic chart"]),
+    ("Gyrocompass",         ["gyrocompass", "gyro compass", "navigat", "sperry", "gyro"]),
+    ("Auto Pilot",          ["auto pilot", "autopilot", "navipilot", "c plath navipilot",
+                             "navipilot"]),
+    ("Depth Sounder",       ["depth sounder", "echo sounder", "echosounder", "fe700", "fe 700"]),
+    ("Wind / Speed Log",    ["speed log", "wind log", "airmar", "walker log", "wind instrument"]),
+    ("Magnetic Compass",    ["magnetic compass", "cassens", "plath", "jupiter 180"]),
+    ("Weather",             ["weather fax", "weatherfax", "weather station", "barometer", "fax30"]),
+    ("Ships Computer & Printer", ["ships computer", "ships printer", "ship computer", "ship printer"]),
+    ("Other",               []),
+]
+
+ENTERTAINMENT_CATEGORIES = [
+    ("Audiovisual",         ["tv", "television", " screen", "projector", "cinema", "apple tv",
+                             "blu-ray", "bluray", "satellite", "foxtel", "hdtv", "oled",
+                             "led tv", "display", "oppo", "tvro", "kvh"]),
+    ("HiFi & Audio",        ["speaker", " amp", "amplifier", "audio", "sound system",
+                             "hifi", "hi-fi", "music", "subwoofer", "integra", "denon",
+                             "sonos", "alpine", "surround"]),
+    ("Control Systems",     ["crestron", "lutron", "control system", "ipad", "controller",
+                             "logitech", "remote", "prodigy"]),
+    ("Other",               []),
+]
+
+TENDERS_CATEGORIES = [
+    ("Tenders",             ["tender", "dinghy", "rigid", "williams", "zodiac", "novurania",
+                             "castoldi", "protender", "jet tender", "rescue tender",
+                             "special craft", "15'", "16'", "17'", "18'", "19'", "20'",
+                             "5.0m", "5.05m", "5.5m", "6m", "7m"]),
+    ("Jet Skis",            ["jet ski", "jetski", "waverunner", "wave runner", "yamaha vx",
+                             "seadoo", "sea-doo", "stand-up jet"]),
+    ("Water Toys",          ["seabob", "sea bob", "kayak", "paddleboard", "paddle board",
+                             "wakeboard", "wake board", "foil", "e-foil", "efoil",
+                             "towable", "water ski", "waterski", "scooter", "sea wing",
+                             "fliteboard", "iaqua", "flyboard", "inflatable platform",
+                             "jungle", "tube"]),
+    ("Fishing & Beach",     ["fishing", "beach", "canopy", "umbrella", "sunlounge",
+                             "deck chair"]),
+    ("Other",               []),
+]
+
+DECK_CATEGORIES = [
+    ("Anchors & Chains",    ["anchor", " chain", "shackle", "rode", "hhp", "poole"]),
+    ("Windlasses & Capstans",["windlass", "capstan", "winch", "nanni"]),
+    ("Cranes & Davits",     ["crane", "davit", "boom", "lifting", "gantry", "jeremy rogers",
+                             "ascon"]),
+    ("Passerelle & Gangway",["passerelle", "gangway", "boarding", " ladder", "marquipt",
+                             "mediterranean passerelle", "motomar"]),
+    ("Swimming & Water Features", ["swimming platform", "swim platform", "pool", "jacuzzi",
+                                   "deck shower", "underwater light"]),
+    ("Other",               []),
+]
+
+SAFETY_CATEGORIES = [
+    ("CCTV & Security",     ["cctv", "camera", "security system", "monitor", "dell display",
+                             "panasonic cctv"]),
+    ("Fire Detection & Alarms", ["alarm", "fire detection", "smoke", "gas detector",
+                                  "detection system", "onyx", "consillium"]),
+    ("Fixed Firefighting",  ["fire suppression", "fixed firefighting", "foam system",
+                             "ultrafog", "technoship", "sprinkler"]),
+    ("Portable Firefighting",["extinguisher", "fire hose", "jet nozzle", "fire suit",
+                              "co2", "foam 9", "powder"]),
+    ("Life Rafts",          ["life raft", "liferaft", " raft", "duarry", "survitec",
+                             "10-man", "12-man", "20-man"]),
+    ("Lifejackets & Immersion Suits", ["lifejacket", "life jacket", "immersion suit",
+                                        "survival suit", "adult lifejacket", "child lifejacket"]),
+    ("Life Rings & Buoys",  ["lifebuoy", "life ring", "lifering", "buoy with lifeline",
+                             "buoy with smoke"]),
+    ("EPIRB & SART",        ["epirb", "sart", "beacon", "acr global", "jotron"]),
+    ("Flares & Signals",    ["flare", "signal", "parachute flare", "handheld flare",
+                             "orange smoke"]),
+    ("EEPDS / Breathing",   ["eebds", "eepds", "drager", "ocenco", "breathing apparatus"]),
+    ("Medical",             ["medical", "oxygen", "first aid", "medaire", "resuscitator"]),
+    ("Other",               []),
+]
+
+
+# ---------------------------------------------------------------------------
+# Scoring & assignment
+# ---------------------------------------------------------------------------
+
+def _score_line(line: str, keywords: list[str]) -> int:
+    lower = line.lower()
+    return sum(1 for kw in keywords if kw in lower)
+
+
+def _categorize_lines(
+    lines: list[str],
+    categories: list[tuple],
+) -> list[tuple[str, list[str]]]:
+    """
+    Assign each line to the best-matching category, then deduplicate.
+    - Within each bucket: near-duplicate lines are collapsed (longer kept).
+    - Across buckets: once a line is placed, near-duplicates in other
+      buckets are removed, so no content repeats across categories.
+    Returns only non-empty categories in definition order.
+    """
+    cat_names = [c[0] for c in categories]
+    catch_all = cat_names[-1]
+
+    buckets: dict[str, list[str]] = {name: [] for name in cat_names}
+
+    for line in lines:
+        best_cat = catch_all
+        best_score = 0
+        for cat_name, keywords in categories:
+            if not keywords:
+                continue
+            score = _score_line(line, keywords)
+            if score > best_score:
+                best_score = score
+                best_cat = cat_name
+        buckets[best_cat].append(line)
+
+    # Deduplicate within each bucket
+    for name in cat_names:
+        buckets[name] = _dedup_bucket(buckets[name])
+
+    # Deduplicate across buckets: track what's already placed
+    placed: list[str] = []
+    result = []
+    for name in cat_names:
+        clean = []
+        for line in buckets[name]:
+            if any(_is_near_duplicate(line, p) for p in placed):
+                continue
+            clean.append(line)
+            placed.append(line)
+        if clean:
+            result.append((name, clean))
+
+    return result
+
+
+# ---------------------------------------------------------------------------
+# Refit: group by year
+# ---------------------------------------------------------------------------
+
+_YEAR_RE = re.compile(r'^(\d{4}(?:[/\-]\d{2,4})?)[:\s]*$')
+
+
+def _categorize_refit(lines: list[str]) -> list[tuple[str, list[str]]]:
+    """Group refit lines by year label, most recent year first."""
+    buckets: dict[str, list[str]] = {}
+    order: list[str] = []
+    current = "General"
+
+    for line in lines:
+        m = _YEAR_RE.match(line.strip())
+        if m:
+            current = m.group(1).rstrip(':/').strip()
+            if current not in buckets:
+                buckets[current] = []
+                order.append(current)
+        else:
+            if current not in buckets:
+                buckets[current] = []
+                order.append(current)
+            buckets[current].append(line)
+
+    def _sort_key(label: str) -> int:
+        if label == "General":
+            return 0
+        try:
+            return -int(label[:4])
+        except ValueError:
+            return 0
+
+    sorted_order = sorted(order, key=_sort_key)
+
+    # Dedup within each year bucket and across years (most recent wins)
+    placed: list[str] = []
+    result = []
+    for y in sorted_order:
+        clean = _dedup_bucket(buckets[y])
+        clean = [l for l in clean if not any(_is_near_duplicate(l, p) for p in placed)]
+        placed.extend(clean)
+        if clean:
+            result.append((y, clean))
+    return result
+
+
+# ---------------------------------------------------------------------------
+# Public API
+# ---------------------------------------------------------------------------
+
+_SECTION_MAP: dict[str, tuple] = {
+    "ACCOMMODATION":               (ACCOMMODATION_CATEGORIES, False),
+    "GALLEY & LAUNDRY EQUIPMENT":  (GALLEY_CATEGORIES,        False),
+    "COMMUNICATION EQUIPMENT":     (COMMUNICATION_CATEGORIES, False),
+    "NAVIGATION EQUIPMENT":        (NAVIGATION_CATEGORIES,    False),
+    "ENTERTAINMENT EQUIPMENT":     (ENTERTAINMENT_CATEGORIES, False),
+    "TENDERS & TOYS":              (TENDERS_CATEGORIES,       False),
+    "DECK EQUIPMENT":              (DECK_CATEGORIES,          False),
+    "SAFETY & SECURITY EQUIPMENT": (SAFETY_CATEGORIES,        False),
+    "REFIT HISTORY":               (None,                     True),
+}
+
+
+def categorize_sections(
+    sections: dict[str, list[str]],
+) -> dict[str, list[tuple[str, list[str]]]]:
+    """
+    Takes raw sections dict and returns:
+        {section_key: [(category_name, [lines]), ...]}
+
+    Sections not in _SECTION_MAP are passed through with an empty category name.
+    """
+    result: dict[str, list[tuple[str, list[str]]]] = {}
+
+    for key, lines in sections.items():
+        if key not in _SECTION_MAP:
+            result[key] = [("", lines)]
+            continue
+
+        categories, is_refit = _SECTION_MAP[key]
+
+        if is_refit:
+            result[key] = _categorize_refit(lines)
+        else:
+            result[key] = _categorize_lines(lines, categories)
+
+    return result

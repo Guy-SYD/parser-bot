@@ -1,0 +1,32 @@
+{
+  "exact_field_replacements": {
+    "BUILDER": {
+      "delta carbon": "Delta Power Boats"
+    },
+    "ENGINE_MAKE": {
+      "mtu": "MTU"
+    },
+    "GENERATOR_MAKE": {
+      "northern lights": "Northern Lights"
+    }
+  },
+  "contains_field_replacements": {
+    "BUILDER": {
+      "benetti yachts": "Benetti"
+    }
+  },
+  "make_model_split_rules": {
+    "ENGINE": {
+      "volvo penta": {
+        "MAKE": "Volvo",
+        "MODEL": "Penta"
+      }
+    },
+    "GENERATOR": {
+      "volvo penta": {
+        "MAKE": "Volvo",
+        "MODEL": "Penta"
+      }
+    }
+  }
+}

@@ -1,0 +1,168 @@
+NORMALIZATION RULE TEMPLATES
+
+Matching notes
+- Matching is case-insensitive
+- Extra spaces are ignored
+- Output keeps the exact capitalization you type on the right side
+- Punctuation is NOT automatically normalized
+- Best practice: put the left-hand side in lowercase
+- BUILDER can now use either exact match or contains match
+
+-----------------------------------
+BUILDER EXACT RULE
+-----------------------------------
+Put this inside:
+exact_field_replacements > BUILDER
+
+Use this when the full builder text should match exactly.
+
+"raw builder text from parser": "Final Builder Name"
+
+Examples:
+"delta carbon": "Delta Power Boats"
+"benetti yachts s.p.a.": "Benetti"
+
+-----------------------------------
+BUILDER CONTAINS RULE
+-----------------------------------
+Put this inside:
+contains_field_replacements > BUILDER
+
+Use this when the raw builder text may contain extra wording, but you still want one final builder name.
+
+"part of raw builder text from parser": "Final Builder Name"
+
+Example:
+"benetti yachts": "Benetti"
+
+This is useful for values like:
+- Benetti Yachts
+- Benetti Yachts S.P.A.
+- BENETTI YACHTS
+
+-----------------------------------
+ENGINE MAKE CONTAINS RULE
+-----------------------------------
+Put this inside:
+contains_field_replacements > ENGINE_MAKE
+
+Use this when the raw engine make text may include extra words, but you still want one consistent final engine make.
+
+"part of raw engine make from parser": "Final Engine Make"
+
+Examples:
+"man engines": "MAN"
+"mtu marine": "MTU"
+
+This is useful for values like:
+- MAN Engines
+- MAN Engines GmbH
+- MTU Marine
+- MTU Friedrichshafen
+
+-----------------------------------
+GENERATOR MAKE CONTAINS RULE
+-----------------------------------
+Put this inside:
+contains_field_replacements > GENERATOR_MAKE
+
+Use this when the raw generator make text may include extra words, but you still want one consistent final generator make.
+
+"part of raw generator make from parser": "Final Generator Make"
+
+Examples:
+"cummins onan": "Cummins Onan"
+"northern lights": "Northern Lights"
+
+This is useful for values like:
+- Cummins Onan Marine
+- Northern Lights Generators
+- NORTHERN LIGHTS
+
+-----------------------------------
+ENGINE MAKE RULE
+-----------------------------------
+Put this inside:
+exact_field_replacements > ENGINE_MAKE
+
+Use this when the engine make should stay as one field, but needs normalizing.
+
+"raw engine make from parser": "Final Engine Make"
+
+Examples:
+"man engines": "MAN"
+"mtu": "MTU"
+
+-----------------------------------
+GENERATOR MAKE RULE
+-----------------------------------
+Put this inside:
+exact_field_replacements > GENERATOR_MAKE
+
+Use this when the generator make should stay as one field, but needs normalizing.
+
+"raw generator make from parser": "Final Generator Make"
+
+Example:
+"cummins onan": "Cummins Onan"
+
+-----------------------------------
+ENGINE MAKE/MODEL SPLIT RULE
+-----------------------------------
+Put this inside:
+make_model_split_rules > ENGINE
+
+Use this when the parser reads a combined engine make, but you want it split into make + model.
+
+"raw combined engine make": {
+  "MAKE": "Final Make",
+  "MODEL": "Final Model"
+}
+
+Examples:
+"volvo penta": {
+  "MAKE": "Volvo",
+  "MODEL": "Penta"
+}
+
+"caterpillar marine": {
+  "MAKE": "Caterpillar",
+  "MODEL": "Marine"
+}
+
+-----------------------------------
+GENERATOR MAKE/MODEL SPLIT RULE
+-----------------------------------
+Put this inside:
+make_model_split_rules > GENERATOR
+
+Use this when the parser reads a combined generator make, but you want it split into make + model.
+
+"raw combined generator make": {
+  "MAKE": "Final Make",
+  "MODEL": "Final Model"
+}
+
+Examples:
+"kohler marine": {
+  "MAKE": "Kohler",
+  "MODEL": "Marine"
+}
+
+"volvo penta": {
+  "MAKE": "Volvo",
+  "MODEL": "Penta"
+}
+
+-----------------------------------
+QUICK GUIDE
+-----------------------------------
+Use exact_field_replacements when:
+- the whole field should be replaced directly
+
+Use contains_field_replacements when:
+- the raw field text may include extra words
+- you want one consistent final builder / engine make / generator make
+
+Use make_model_split_rules when:
+- one raw make value should become separate MAKE and MODEL values

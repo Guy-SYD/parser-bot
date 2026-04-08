@@ -1,0 +1,21 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+
+# Virtual environment
+.venv/
+
+# Auth session (contains login cookies — never commit)
+auth/state.json
+
+# Output files
+output/result.json
+
+# Sample PDFs (potentially confidential)
+samples/*.pdf
+
+# OS noise
+.DS_Store
+Thumbs.db
+desktop.ini

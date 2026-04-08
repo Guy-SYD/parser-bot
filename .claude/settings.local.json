@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(.venv/Scripts/python.exe src/input_YIQ.py)",
+      "Bash(.venv/Scripts/python.exe src/input_YIQ.py --id 447250)",
+      "Bash(\"C:\\\\Automation\\\\Bots\\\\Parser Bot\\\\.venv\\\\Scripts\\\\python.exe\" \"C:\\\\Automation\\\\Bots\\\\Parser Bot\\\\read_equipment_tab.py\")",
+      "Bash(.venv/Scripts/python.exe -c ':*)",
+      "Bash(.venv/Scripts/python.exe src/main.py)",
+      "Bash(.venv/Scripts/python -c \"import flask; print\\(flask.__version__\\)\")"
+    ]
+  }
+}
