@@ -6,7 +6,8 @@ __pycache__/
 # Virtual environment
 .venv/
 
-# Auth session (contains login cookies — never commit)
+# Auth & credentials (never commit)
+Login.txt
 auth/state.json
 
 # Output files
