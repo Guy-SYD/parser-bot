@@ -274,6 +274,7 @@ parser = argparse.ArgumentParser()
 parser.add_argument("--input", help="Optional path to a specific input file")
 parser.add_argument("--id", help="Yacht ID override")
 parser.add_argument("--no-review", action="store_true", help="Skip the review prompt and close immediately")
+parser.add_argument("--no-equipment", action="store_true", help="Skip the Equipment tab entirely")
 args = parser.parse_args()
 
 run_pdf_parser()
@@ -1789,68 +1790,71 @@ with sync_playwright() as p:
     # EQUIPMENT TAB
     # ---------------------------
 
-    equipment_to_fill = {
-        key: EQUIPMENT_SECTIONS[key]
-        for key in EQUIPMENT_SUBTAB_ORDER
-        if key in EQUIPMENT_SECTIONS and any(str(l).strip() for l in EQUIPMENT_SECTIONS[key])
-    }
-
-    # Categorise raw lines into (category, [lines]) structure
-    _categorized = _categorize_sections(equipment_to_fill)
-
-    if equipment_to_fill:
-        print("\n--- Equipment Tab ---")
-
-        try:
-            equipment_tab = page.get_by_role("tab", name="Equipment", exact=True)
-            equipment_tab.wait_for(state="visible", timeout=8000)
-            equipment_tab.scroll_into_view_if_needed()
-            equipment_tab.click()
-            page.wait_for_timeout(2000)  # wait for subtab list to render
-
-            for key, lines in equipment_to_fill.items():
-                label = EQUIPMENT_SUBTAB_LABELS[key]
-                non_empty = [str(l).strip() for l in lines if str(l).strip()]
-                print(f"Filling: {label} ({len(non_empty)} lines)")
-
-                # Click subtab — wait up to 8s for it to appear after Equipment tab renders
-                try:
-                    subtab = page.get_by_role("tab", name=label, exact=True)
-                    subtab.wait_for(state="visible", timeout=8000)
-                    subtab.scroll_into_view_if_needed()
-                    subtab.click()
-                    page.wait_for_timeout(1000)
-                except PlaywrightTimeoutError:
-                    print(f"  [MISS] subtab not found: '{label}'")
-                    FIELD_MISSES.append({"field": f"Equipment/{label}", "reason": "subtab not found"})
-                    continue
-
-                # nth(1) is the active subtab panel; nth(0) is the outer Equipment section wrapper
-                panel = page.locator(".ant-tabs-tabpane-active").nth(1)
-
-                # The contenteditable has min-h-0 so Playwright considers it "not visible" —
-                # check it's attached and use force=True on click instead of waiting for visible
-                editor = panel.locator("[contenteditable='true']").first
-                if editor.count() == 0:
-                    print(f"  [MISS] editor not found in panel: '{label}'")
-                    FIELD_MISSES.append({"field": f"Equipment/{label}", "reason": "editor not found"})
-                    continue
-
-                try:
-                    structured = _categorized.get(key, [("", non_empty)])
-                    write_equipment_content(panel, page, structured)
-                    total = sum(len(ls) for _, ls in structured)
-                    print(f"  [OK] {len(structured)} categories, {total} lines written")
-                except Exception as e:
-                    print(f"  [ERROR] {label}: {e}")
-                    FIELD_MISSES.append({"field": f"Equipment/{label}", "reason": str(e)})
-
-        except PlaywrightTimeoutError:
-            FIELD_MISSES.append({"field": "Equipment tab", "reason": "top-level tab not found"})
-        except Exception as e:
-            print(f"  [ERROR] Equipment tab: {e}")
+    if getattr(args, 'no_equipment', False):
+        print("\n--- Equipment Tab skipped ---")
     else:
-        print("\nNo equipment sections to fill.")
+        equipment_to_fill = {
+            key: EQUIPMENT_SECTIONS[key]
+            for key in EQUIPMENT_SUBTAB_ORDER
+            if key in EQUIPMENT_SECTIONS and any(str(l).strip() for l in EQUIPMENT_SECTIONS[key])
+        }
+
+        # Categorise raw lines into (category, [lines]) structure
+        _categorized = _categorize_sections(equipment_to_fill)
+
+        if equipment_to_fill:
+            print("\n--- Equipment Tab ---")
+
+            try:
+                equipment_tab = page.get_by_role("tab", name="Equipment", exact=True)
+                equipment_tab.wait_for(state="visible", timeout=8000)
+                equipment_tab.scroll_into_view_if_needed()
+                equipment_tab.click()
+                page.wait_for_timeout(2000)  # wait for subtab list to render
+
+                for key, lines in equipment_to_fill.items():
+                    label = EQUIPMENT_SUBTAB_LABELS[key]
+                    non_empty = [str(l).strip() for l in lines if str(l).strip()]
+                    print(f"Filling: {label} ({len(non_empty)} lines)")
+
+                    # Click subtab — wait up to 8s for it to appear after Equipment tab renders
+                    try:
+                        subtab = page.get_by_role("tab", name=label, exact=True)
+                        subtab.wait_for(state="visible", timeout=8000)
+                        subtab.scroll_into_view_if_needed()
+                        subtab.click()
+                        page.wait_for_timeout(1000)
+                    except PlaywrightTimeoutError:
+                        print(f"  [MISS] subtab not found: '{label}'")
+                        FIELD_MISSES.append({"field": f"Equipment/{label}", "reason": "subtab not found"})
+                        continue
+
+                    # nth(1) is the active subtab panel; nth(0) is the outer Equipment section wrapper
+                    panel = page.locator(".ant-tabs-tabpane-active").nth(1)
+
+                    # The contenteditable has min-h-0 so Playwright considers it "not visible" —
+                    # check it's attached and use force=True on click instead of waiting for visible
+                    editor = panel.locator("[contenteditable='true']").first
+                    if editor.count() == 0:
+                        print(f"  [MISS] editor not found in panel: '{label}'")
+                        FIELD_MISSES.append({"field": f"Equipment/{label}", "reason": "editor not found"})
+                        continue
+
+                    try:
+                        structured = _categorized.get(key, [("", non_empty)])
+                        write_equipment_content(panel, page, structured)
+                        total = sum(len(ls) for _, ls in structured)
+                        print(f"  [OK] {len(structured)} categories, {total} lines written")
+                    except Exception as e:
+                        print(f"  [ERROR] {label}: {e}")
+                        FIELD_MISSES.append({"field": f"Equipment/{label}", "reason": str(e)})
+
+            except PlaywrightTimeoutError:
+                FIELD_MISSES.append({"field": "Equipment tab", "reason": "top-level tab not found"})
+            except Exception as e:
+                print(f"  [ERROR] Equipment tab: {e}")
+        else:
+            print("\nNo equipment sections to fill.")
 
     print("\n====================")
     print("RUN COMPLETE - NOT SAVING")
