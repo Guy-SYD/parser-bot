@@ -331,6 +331,7 @@ def run():
         proc1.wait()
         if proc1.returncode != 0:
             yield f"\n[ERROR] Parser exited with code {proc1.returncode}\n"
+            pdf_path.unlink(missing_ok=True)
             return
 
         # Step 2 — YachtIQ filler
@@ -351,14 +352,17 @@ def run():
         for line in proc2.stdout:
             yield line
             if "=== BROWSER OPEN" in line:
+                pdf_path.unlink(missing_ok=True)
                 yield "\nLog complete. Review the YachtIQ page, save, then close it.\n"
                 return
 
         proc2.wait()
         if proc2.returncode != 0:
             yield f"\n[ERROR] YachtIQ filler exited with code {proc2.returncode}\n"
+            pdf_path.unlink(missing_ok=True)
             return
 
+        pdf_path.unlink(missing_ok=True)
         yield "\nDone.\n"
 
     return Response(generate(), mimetype="text/plain")
