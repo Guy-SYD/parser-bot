@@ -34,6 +34,29 @@ KNOWN_GENERATOR_MAKES = [
     "Lugger",
     "Perkins",
     "Volvo Penta",
+    "Mercedes Benz",
+    "Mercedes-Benz",
+    "MTU",
+    "MAN",
+    "Scania",
+    "Baudouin",
+    "Deutz",
+    "Mitsubishi",
+    "Yanmar",
+    "Westerbeke",
+    "Beta Marine",
+    "Nanni",
+    "Kubota",
+    "Vetus",
+    "Stamford",
+    "Leroy Somer",
+    "Mecc Alte",
+    "ABB",
+    "Rolls Royce",
+    "Rolls-Royce",
+    "GE",
+    "Wartsila",
+    "Wärtsilä",
 ]
 
 TYPE_KEYWORDS = [
@@ -270,14 +293,14 @@ def find_engine_output_hp(text: str) -> str:
 
 
 def find_generator_output(text: str) -> str:
-    matches = re.findall(r"\b(\d+(?:\.\d+)?)\s*(HP|KW|KVA)\b", text, flags=re.IGNORECASE)
+    matches = re.findall(r"\b(\d+(?:\.\d+)?)\s*(KVA|KWA|KW)\b", text, flags=re.IGNORECASE)
 
     if not matches:
         return ""
 
     # prefer KW / KVA for generators
     for value, unit in matches:
-        if unit.upper() in {"KW", "KVA"}:
+        if unit.upper() in {"KW", "KVA", "KWA"}:
             return value
 
     # rare case: generator output given in HP
@@ -759,6 +782,24 @@ MACHINERY_SECTION_HEADERS = [
     "electrical systems",
     "other machinery",
     "machinery",
+    # document-level section headings that signal the AC/battery section has ended
+    "auxiliary machinery",
+    "antifouling",
+    "navigation",
+    "fuel and oil",
+    "fuel oil",
+    "anchoring",
+    "anchor",
+    "steering system",
+    "firefighting",
+    "fire fighting",
+    "safety",
+    "communication",
+    "entertainment",
+    "accommodation",
+    "tender",
+    "deck equipment",
+    "refit",
 ]
 
 EQUIPMENT_SECTION_HEADERS = [

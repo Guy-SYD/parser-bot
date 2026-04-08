@@ -170,28 +170,43 @@ def get_all_known_labels() -> list[str]:
 ALL_KNOWN_LABELS = get_all_known_labels()
 
 
-def trim_at_next_label(value: str, current_field: str) -> str:
-    all_labels = []
+def _build_split_patterns() -> list[tuple[re.Pattern, str]]:
+    all_aliases = []
+    for aliases in FIELD_ALIASES.values():
+        all_aliases.extend(aliases)
+    all_aliases = sorted(set(all_aliases), key=len, reverse=True)
+    return [
+        (re.compile(rf"(?<!^)(?<!\w)({re.escape(alias)})\s*[:\-]", flags=re.IGNORECASE), alias)
+        for alias in all_aliases
+    ]
 
+_SPLIT_PATTERNS = _build_split_patterns()
+
+
+def _build_trim_labels() -> list[tuple[re.Pattern, None]]:
+    all_labels = []
     for aliases in FIELD_ALIASES.values():
         all_labels.extend(aliases)
-
     all_labels.extend(HEADER_EXCLUSIONS)
+    result = []
+    for label in sorted(set(all_labels), key=len, reverse=True):
+        p1 = re.compile(rf"\b{re.escape(label)}\b\s*[:\-]", flags=re.IGNORECASE)
+        p2 = re.compile(rf"\b{re.escape(label)}\b", flags=re.IGNORECASE)
+        result.append((label, p1, p2))
+    return result
 
+_TRIM_LABEL_PATTERNS = _build_trim_labels()
+
+
+def trim_at_next_label(value: str, current_field: str) -> str:
     current_aliases = set(FIELD_ALIASES.get(current_field, []))
     cut_positions = []
 
-    for label in sorted(set(all_labels), key=len, reverse=True):
+    for label, p1, p2 in _TRIM_LABEL_PATTERNS:
         if label in current_aliases:
             continue
-
-        patterns = [
-            rf"\b{re.escape(label)}\b\s*[:\-]",   # normal label form
-            rf"\b{re.escape(label)}\b",           # bare header form
-        ]
-
-        for pattern in patterns:
-            match = re.search(pattern, value, flags=re.IGNORECASE)
+        for p in (p1, p2):
+            match = p.search(value)
             if match:
                 cut_positions.append(match.start())
                 break
@@ -223,14 +238,6 @@ def extract_after_label(line: str, alias: str) -> str | None:
     return None
 
 def split_merged_label_lines(lines: list[str]) -> list[str]:
-    all_aliases = []
-
-    for aliases in FIELD_ALIASES.values():
-        all_aliases.extend(aliases)
-
-    # longest first so "crew berths" wins before "crew"
-    all_aliases = sorted(set(all_aliases), key=len, reverse=True)
-
     split_lines = []
 
     for raw in lines:
@@ -246,11 +253,7 @@ def split_merged_label_lines(lines: list[str]) -> list[str]:
 
             working = part
 
-            for alias in all_aliases:
-                pattern = re.compile(
-                    rf"(?<!^)(?<!\w)({re.escape(alias)})\s*[:\-]",
-                    flags=re.IGNORECASE
-                )
+            for pattern, _alias in _SPLIT_PATTERNS:
                 working = pattern.sub(r"\n\1: ", working)
 
             for sub in working.split("\n"):

@@ -13,14 +13,13 @@ def extract_pages(pdf_path: str) -> list[dict]:
     with pdfplumber.open(pdf_file) as pdf:
         for i, page in enumerate(pdf.pages, start=1):
             text = page.extract_text() or ""
-            words = page.extract_words() or []
             lines = [line.strip() for line in text.splitlines() if line.strip()]
 
             pages.append({
                 "page_number": i,
                 "text": text,
                 "lines": lines,
-                "word_count": len(words),
+                "word_count": len(text.split()),
                 "char_count": len(text),
             })
 

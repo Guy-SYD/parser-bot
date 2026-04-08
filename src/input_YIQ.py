@@ -464,7 +464,7 @@ def select_dropdown_by_typing(
     value,
     page,
     field_name=None,
-    wait_ms=500,
+    wait_ms=300,
     allow_best_visible_match=False,
     min_best_match_score=0.72,
 ):
@@ -548,7 +548,7 @@ def select_autocomplete_by_name(
     value,
     page,
     field_name=None,
-    wait_ms=400,
+    wait_ms=250,
     allow_best_visible_match=False,
     min_best_match_score=0.72,
 ):
@@ -678,6 +678,43 @@ def _is_equipment_header(line: str) -> bool:
     return True
 
 
+_QTY_PREFIX = re.compile(r'^(\d+)\s*[xX]\s+(?!\d)', re.IGNORECASE)
+_QTY_SUFFIX = re.compile(r'^(.*?)\s+[xX]\s*(\d+)\s*$', re.IGNORECASE)
+
+
+def _normalize_quantity(line: str) -> str:
+    """
+    Normalize quantity expressions:
+      '2 x Something'        → '(2) Something'   (quantity prefix)
+      'Something x 2'        → 'Something (2)'   (quantity suffix, in-place)
+    Leaves dimension-style expressions like '600 x 400mm' alone.
+    """
+    m = _QTY_PREFIX.match(line)
+    if m:
+        return f"({m.group(1)}) {line[m.end():].strip()}"
+    m = _QTY_SUFFIX.match(line)
+    if m:
+        return f"{m.group(1).strip()} ({m.group(2)})"
+    return line
+
+
+def _strip_category_prefix(line: str, category: str) -> str:
+    """
+    Remove the category name from the start of a line when it's already
+    implied by the section header above it.
+    e.g. under 'GPS': 'GPS Koden KGP-922' → 'Koden KGP-922'
+    'Other' and blank categories are left untouched.
+    """
+    if not category or category.lower() == "other":
+        return line
+    pattern = re.compile(
+        r'^' + re.escape(category) + r'\s*\d*\s*[:\-]?\s*',
+        re.IGNORECASE
+    )
+    stripped = pattern.sub('', line).strip(' :-')
+    return stripped if stripped else line
+
+
 def _split_header_item(line: str):
     """
     For a bare 'Label:' line return (label, None).
@@ -738,6 +775,8 @@ def write_equipment_content(panel, page, structured: list[tuple[str, list[str]]]
             html_parts.append(f"<p><strong>{_html.escape(cat_name)}</strong></p>")
             plain_parts.append(cat_name)
         for line in _join_wrapped_lines(lines):
+            line = _strip_category_prefix(line, cat_name)
+            line = _normalize_quantity(line)
             print(f"    [ ] {line[:90]}")
             html_parts.append(f"<p>• {_html.escape(line)}</p>")
             plain_parts.append("• " + line)
@@ -1090,14 +1129,14 @@ with sync_playwright() as p:
     page = context.new_page()
 
     page.goto(YACHT_URL, wait_until="load")
-    page.wait_for_timeout(2500)
+    page.locator("button.ant-btn-icon-only").first.wait_for(state="visible", timeout=15000)
 
     if is_on_login_page(page):
         do_login(page, context, YACHT_URL)
 
     # Edit
     page.locator("button.ant-btn-icon-only").first.click()
-    page.wait_for_timeout(1000)
+    page.locator("input.ant-input-number-input").first.wait_for(state="visible", timeout=8000)
 
     # ---------------------------
     # GENERAL / SUMMARY
@@ -1810,7 +1849,6 @@ with sync_playwright() as p:
                 equipment_tab.wait_for(state="visible", timeout=8000)
                 equipment_tab.scroll_into_view_if_needed()
                 equipment_tab.click()
-                page.wait_for_timeout(2000)  # wait for subtab list to render
 
                 for key, lines in equipment_to_fill.items():
                     label = EQUIPMENT_SUBTAB_LABELS[key]
@@ -1823,7 +1861,7 @@ with sync_playwright() as p:
                         subtab.wait_for(state="visible", timeout=8000)
                         subtab.scroll_into_view_if_needed()
                         subtab.click()
-                        page.wait_for_timeout(1000)
+                        page.locator(".ant-tabs-tabpane-active").nth(1).locator("[contenteditable='true']").first.wait_for(state="attached", timeout=8000)
                     except PlaywrightTimeoutError:
                         print(f"  [MISS] subtab not found: '{label}'")
                         FIELD_MISSES.append({"field": f"Equipment/{label}", "reason": "subtab not found"})

@@ -121,16 +121,18 @@ def main():
     yacht = YachtData()
     conflicts = []
 
+    # basic_fields is most expensive — run once over all pages combined
+    # (split_merged_label_lines is O(lines × aliases); no point repeating per page)
+    all_lines = [line for page in pages for line in page["lines"]]
+    basic = extract_basic_fields_from_lines(all_lines)
+    _apply_extractor_results(yacht, basic, 0, "basic", conflicts)
+
     for page in pages:
-        page_num = page["page_number"]
-        basic      = extract_basic_fields_from_lines(page["lines"])
+        page_num   = page["page_number"]
         dimensions = extract_dimensions_from_lines(page["lines"])
         units      = extract_units_fields_from_lines(page["lines"])
         machinery  = extract_machinery_from_lines(page["lines"])
 
-        # Apply each extractor's results separately so a blank result from
-        # one extractor can never erase a good value found by an earlier one.
-        _apply_extractor_results(yacht, basic,      page_num, "basic",      conflicts)
         _apply_extractor_results(yacht, dimensions, page_num, "dimensions", conflicts)
         _apply_extractor_results(yacht, units,      page_num, "units",      conflicts)
         _apply_extractor_results(yacht, machinery,  page_num, "machinery",  conflicts)
