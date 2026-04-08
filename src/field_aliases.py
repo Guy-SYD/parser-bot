@@ -7,6 +7,14 @@ FIELD_ALIASES = {
         "loa (ft/m)",
     ],
 
+    "LWL": [
+        "lwl",
+        "length at waterline",
+        "length waterline",
+        "waterline length",
+        "wl length",
+    ],
+
     "BEAM": [
         "beam",
         "beam overall",
@@ -96,6 +104,78 @@ FIELD_ALIASES = {
         "type",
         "yacht type",
         "vessel type",
+    ],
+
+    "YACHT_SUBTYPE": [
+        "yacht subtype",
+        "subtype",
+        "rig type",
+        "rig",
+    ],
+
+    "RIG_TYPE": [
+        "rig type",
+        "rig",
+        "rigging",
+    ],
+
+    "BUILD_TYPE": [
+        "build type",
+        "build",
+        "construction type",
+    ],
+
+    "HULL_COLOR": [
+        "hull color",
+        "hull colour",
+        "hull paint",
+        "hull finish",
+    ],
+
+    "NET_TONNAGE": [
+        "net tonnage",
+        "nt",
+        "net tons",
+    ],
+
+    "CONVERSION_YEAR": [
+        "conversion year",
+        "converted",
+        "conversion",
+    ],
+
+    "REFIT_EXTERIOR_DESIGNER": [
+        "refit exterior designer",
+        "refit ext designer",
+    ],
+
+    "REFIT_INTERIOR_DESIGNER": [
+        "refit interior designer",
+        "refit int designer",
+    ],
+
+    "DISPLACEMENT_NOTES": [
+        "displacement notes",
+        "displacement",
+    ],
+
+    "FULL_DISPLACEMENT": [
+        "full displacement",
+        "full load displacement",
+        "displacement full load",
+    ],
+
+    "HALF_LOAD_DISPLACEMENT": [
+        "half load displacement",
+        "half displacement",
+        "displacement half load",
+    ],
+
+    "LIGHT_LOAD_DISPLACEMENT": [
+        "light load displacement",
+        "light displacement",
+        "displacement light load",
+        "light ship displacement",
     ],
 
     "MODEL": [
@@ -416,6 +496,10 @@ MACHINERY_FIELD_ALIASES = {
         "stabilisers",
         "fins",
     ],
+    "STABILIZER_MODEL": [
+        "stabilizer model",
+        "stabiliser model",
+    ],
     "STABILIZER_TYPE": [
         "stabilizer type",
         "stabiliser type",
@@ -459,5 +543,24 @@ MACHINERY_FIELD_ALIASES = {
         "gearbox",
         "gear box",
         "transmission",
+    ],
+    "HELICOPTER": [
+        "helicopter",
+        "helicopter capable",
+        "heli pad",
+        "helipad",
+        "helicopter deck",
+    ],
+    "LIFT_CAPABLE": [
+        "lift",
+        "elevator",
+        "lift capable",
+        "wheelchair lift",
+    ],
+    "WHEELCHAIR_ACCESSIBLE": [
+        "wheelchair accessible",
+        "wheelchair access",
+        "handicap accessible",
+        "disabled access",
     ],
 }

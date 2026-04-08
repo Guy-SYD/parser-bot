@@ -7,6 +7,10 @@ class YachtData(BaseModel):
     LOA_IN: str = ""
     LOA_M: str = ""
 
+    LWL_FT: str = ""
+    LWL_IN: str = ""
+    LWL_M: str = ""
+
     YEAR: str = ""
     REFIT: str = ""
     BUILDER: str = ""
@@ -28,14 +32,22 @@ class YachtData(BaseModel):
     MIN_DRAFT_M: str = ""
     
     YACHT_TYPE: str = ""
+    YACHT_SUBTYPE: str = ""
     MODEL: str = ""
     HULL_NUMBER: str = ""
     HULL_MATERIAL: str = ""
+    HULL_COLOR: str = ""
     HULL_CONFIGURATION: str = ""
     SUPERSTRUCTURE_MATERIAL: str = ""
+    RIG_TYPE: str = ""
+    BUILD_TYPE: str = ""
     EXTERIOR_DESIGNER: str = ""
     INTERIOR_DESIGNER: str = ""
+    REFIT_EXTERIOR_DESIGNER: str = ""
+    REFIT_INTERIOR_DESIGNER: str = ""
     NAVAL_ARCHITECT: str = ""
+    CONVERSION_YEAR: str = ""
+    NET_TONNAGE: str = ""
 
     MAX_SPEED: str = ""
     CRUISE_SPEED: str = ""
@@ -48,6 +60,11 @@ class YachtData(BaseModel):
     CRUISING_CONSUMPTION_GAL: str = ""
     ECONOMICAL_CONSUMPTION_L: str = ""
     ECONOMICAL_CONSUMPTION_GAL: str = ""
+
+    DISPLACEMENT_NOTES: str = ""
+    FULL_DISPLACEMENT: str = ""
+    HALF_LOAD_DISPLACEMENT: str = ""
+    LIGHT_LOAD_DISPLACEMENT: str = ""
 
     FUEL_L: str = ""
     FUEL_GAL: str = ""
@@ -142,8 +159,13 @@ class YachtData(BaseModel):
     GENERATOR_4_LOCATION: str = ""
 
     STABILIZER_MANUFACTURER: str = ""
+    STABILIZER_MODEL: str = ""
     STABILIZER_TYPE: str = ""
     STABILIZER_SPEED: str = ""
+
+    HELICOPTER: str = ""
+    LIFT_CAPABLE: str = ""
+    WHEELCHAIR_ACCESSIBLE: str = ""
 
     BOW_THRUSTER: str = ""
     STERN_THRUSTER: str = ""

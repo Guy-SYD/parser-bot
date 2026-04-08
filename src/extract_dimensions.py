@@ -4,6 +4,7 @@ from field_aliases import FIELD_ALIASES
 
 DIMENSION_FIELDS = {
     "LOA": ("LOA_FT", "LOA_IN", "LOA_M"),
+    "LWL": ("LWL_FT", "LWL_IN", "LWL_M"),
     "BEAM": ("BEAM_FT", "BEAM_IN", "BEAM_M"),
     "MAX_DRAFT": ("MAX_DRAFT_FT", "MAX_DRAFT_IN", "MAX_DRAFT_M"),
     "MIN_DRAFT": ("MIN_DRAFT_FT", "MIN_DRAFT_IN", "MIN_DRAFT_M"),
@@ -155,6 +156,7 @@ def extract_dimensions_from_lines(lines: list[str]) -> dict:
                 break
         dimension_triples = [
         ("LOA_FT", "LOA_IN", "LOA_M"),
+        ("LWL_FT", "LWL_IN", "LWL_M"),
         ("BEAM_FT", "BEAM_IN", "BEAM_M"),
         ("MAX_DRAFT_FT", "MAX_DRAFT_IN", "MAX_DRAFT_M"),
         ("MIN_DRAFT_FT", "MIN_DRAFT_IN", "MIN_DRAFT_M"),
