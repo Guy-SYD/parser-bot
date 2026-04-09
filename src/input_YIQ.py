@@ -870,6 +870,62 @@ def get_selected_ant_select_text(dropdown_locator):
     except Exception:
         return ""
 
+def _parse_date(date_str: str):
+    """
+    Parse a date string from the extractor into a datetime.date.
+    Handles: 'June 2023', 'Jun 2023', '06/2023', '2023-06-15', '06/15/2023'.
+    Returns None if unparseable. Day defaults to 1 when only month/year given.
+    """
+    from datetime import date as _date
+    import calendar as _cal
+    s = str(date_str).strip()
+    if not s:
+        return None
+    MONTH_ABBR = {m.lower(): i for i, m in enumerate(_cal.month_abbr) if m}
+    MONTH_FULL = {m.lower(): i for i, m in enumerate(_cal.month_name) if m}
+
+    # "June 2023" or "Jun 2023"
+    m = re.match(r'^([A-Za-z]+)\s+(\d{4})$', s)
+    if m:
+        mn = MONTH_FULL.get(m.group(1).lower()) or MONTH_ABBR.get(m.group(1).lower()[:3])
+        if mn:
+            return _date(int(m.group(2)), mn, 1)
+
+    # "06/2023"
+    m = re.match(r'^(\d{1,2})/(\d{4})$', s)
+    if m:
+        return _date(int(m.group(2)), int(m.group(1)), 1)
+
+    # "2023-06-15"
+    m = re.match(r'^(\d{4})-(\d{2})-(\d{2})$', s)
+    if m:
+        return _date(int(m.group(1)), int(m.group(2)), int(m.group(3)))
+
+    # "06/15/2023" (American)
+    m = re.match(r'^(\d{1,2})/(\d{1,2})/(\d{4})$', s)
+    if m:
+        return _date(int(m.group(3)), int(m.group(1)), int(m.group(2)))
+
+    return None
+
+
+def _to_american_date(date_str: str) -> str:
+    """Convert a parser date string to MM/DD/YYYY for the YIQ date picker."""
+    d = _parse_date(date_str)
+    return f"{d.month:02d}/{d.day:02d}/{d.year}" if d else ""
+
+
+def _date_within_6_months(date_str: str) -> bool:
+    """Return True if date_str parses to a date within the last 6 months."""
+    from datetime import date as _date
+    d = _parse_date(date_str)
+    if not d:
+        return False
+    today = _date.today()
+    # Approximate 6 months as 183 days
+    return (today - d).days <= 183
+
+
 def fill_engine_like_block(
     block,
     page,
@@ -956,12 +1012,49 @@ def fill_engine_like_block(
 
             fill_if_present(output_input, data["output"])
 
-    if has_value(data.get("hours")):
-        hours_block = get_row_field_card(block, "Engine hours")
-        if hours_block is None:
-            print(f"[MISS] {row_name}: field not found -> Engine hours")
+    # Hours + Date — only write hours if a date is available.
+    # If the existing date on the form is within 6 months, skip (data is fresh enough).
+    # If the existing date is stale (>6 months) or absent, clear and fill new values.
+    new_hours = data.get("hours", "")
+    new_date_raw = data.get("date", "")
+    new_date_fmt = _to_american_date(new_date_raw) if has_value(new_date_raw) else ""
+
+    hours_block = get_row_field_card(block, "Engine hours")
+    date_block  = get_row_field_card(block, "Date")
+
+    if hours_block and date_block:
+        # Read whatever date is already in the form
+        existing_date_input = date_block.locator("div.ant-picker input").first
+        try:
+            existing_date_val = existing_date_input.input_value() if existing_date_input.count() > 0 else ""
+        except Exception:
+            existing_date_val = ""
+
+        if has_value(existing_date_val) and _date_within_6_months(existing_date_val):
+            print(f"  [{row_name}] Hours/date skipped — existing date {existing_date_val!r} is within 6 months")
         else:
-            fill_if_present(hours_block.locator("input.ant-input-number-input, input").first, data["hours"])
+            # Clear stale hours
+            if has_value(existing_date_val):
+                print(f"  [{row_name}] Clearing stale hours/date ({existing_date_val!r})")
+            hours_input = hours_block.locator("input.ant-input-number-input, input").first
+            hours_input.triple_click()
+            page.keyboard.press("Backspace")
+
+            existing_date_input.triple_click()
+            page.keyboard.press("Backspace")
+
+            # Fill new values only if we have a date to go with the hours
+            if has_value(new_date_fmt) and has_value(new_hours):
+                fill_if_present(hours_input, new_hours)
+                existing_date_input.click()
+                page.keyboard.insert_text(new_date_fmt)
+                page.keyboard.press("Enter")
+                page.wait_for_timeout(150)
+                print(f"  [{row_name}] Hours: {new_hours}, Date: {new_date_fmt}")
+            elif has_value(new_hours):
+                print(f"  [{row_name}] Hours skipped — no date available to accompany them")
+    elif hours_block is None:
+        print(f"[MISS] {row_name}: field not found -> Engine hours")
 
     if has_value(data.get("location")):
         location_block = get_row_field_card(block, "Location")
@@ -1013,6 +1106,7 @@ MAIN_ENGINES = [
         "fuel_type": ENGINE_1_FUEL_TYPE,
         "output": ENGINE_1_OUTPUT_HP,
         "hours": ENGINE_1_HOURS,
+        "date": ENGINE_1_DATE,
         "location": ENGINE_1_LOCATION,
     },
     {
@@ -1023,6 +1117,7 @@ MAIN_ENGINES = [
         "fuel_type": ENGINE_2_FUEL_TYPE,
         "output": ENGINE_2_OUTPUT_HP,
         "hours": ENGINE_2_HOURS,
+        "date": ENGINE_2_DATE,
         "location": ENGINE_2_LOCATION,
     },
     {
@@ -1033,6 +1128,7 @@ MAIN_ENGINES = [
         "fuel_type": ENGINE_3_FUEL_TYPE,
         "output": ENGINE_3_OUTPUT_HP,
         "hours": ENGINE_3_HOURS,
+        "date": ENGINE_3_DATE,
         "location": ENGINE_3_LOCATION,
     },
     {
@@ -1043,9 +1139,9 @@ MAIN_ENGINES = [
         "fuel_type": ENGINE_4_FUEL_TYPE,
         "output": ENGINE_4_OUTPUT_HP,
         "hours": ENGINE_4_HOURS,
+        "date": ENGINE_4_DATE,
         "location": ENGINE_4_LOCATION,
     },
-
 ]
 
 GENERATORS = [
@@ -1057,6 +1153,7 @@ GENERATORS = [
         "fuel_type": GENERATOR_1_FUEL_TYPE,
         "output": GENERATOR_1_OUTPUT,
         "hours": GENERATOR_1_HOURS,
+        "date": GENERATOR_1_DATE,
         "location": GENERATOR_1_LOCATION,
     },
     {
@@ -1067,6 +1164,7 @@ GENERATORS = [
         "fuel_type": GENERATOR_2_FUEL_TYPE,
         "output": GENERATOR_2_OUTPUT,
         "hours": GENERATOR_2_HOURS,
+        "date": GENERATOR_2_DATE,
         "location": GENERATOR_2_LOCATION,
     },
     {
@@ -1077,6 +1175,7 @@ GENERATORS = [
         "fuel_type": GENERATOR_3_FUEL_TYPE,
         "output": GENERATOR_3_OUTPUT,
         "hours": GENERATOR_3_HOURS,
+        "date": GENERATOR_3_DATE,
         "location": GENERATOR_3_LOCATION,
     },
     {
@@ -1087,6 +1186,7 @@ GENERATORS = [
         "fuel_type": GENERATOR_4_FUEL_TYPE,
         "output": GENERATOR_4_OUTPUT,
         "hours": GENERATOR_4_HOURS,
+        "date": GENERATOR_4_DATE,
         "location": GENERATOR_4_LOCATION,
     },
 ]
