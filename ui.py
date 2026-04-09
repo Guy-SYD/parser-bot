@@ -456,15 +456,18 @@ def run():
         return Response("No PDF provided.", status=400)
 
     def generate():
+        def safe(line: str) -> str:
+            return line.encode("utf-8", "replace").decode("utf-8")
+
         # Step 1 — PDF parser
         yield "=== Step 1: Parsing PDF ===\n"
         proc1 = subprocess.Popen(
             [PYTHON, str(BASE_DIR / "src" / "main.py"), "--input", str(pdf_path)],
             stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-            text=True, bufsize=1, cwd=str(BASE_DIR), stdin=subprocess.DEVNULL,
+            bufsize=1, cwd=str(BASE_DIR), stdin=subprocess.DEVNULL,
         )
-        for line in proc1.stdout:
-            yield line
+        for raw in proc1.stdout:
+            yield safe(raw.decode("utf-8", "replace"))
         proc1.wait()
         if proc1.returncode != 0:
             yield f"\n[ERROR] Parser exited with code {proc1.returncode}\n"
@@ -483,9 +486,10 @@ def run():
 
         proc2 = subprocess.Popen(
             cmd2, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-            text=True, bufsize=1, cwd=str(BASE_DIR), stdin=subprocess.DEVNULL,
+            bufsize=1, cwd=str(BASE_DIR), stdin=subprocess.DEVNULL,
         )
-        for line in proc2.stdout:
+        for raw in proc2.stdout:
+            line = safe(raw.decode("utf-8", "replace"))
             yield line
             if "=== BROWSER OPEN" in line:
                 yield "\nLog complete. Review the YachtIQ page, save, then close it.\n"
