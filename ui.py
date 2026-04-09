@@ -48,7 +48,7 @@ def _watchdog():
     while True:
         time.sleep(2)
         if _last_ping is not None and (time.time() - _last_ping) > _PING_TIMEOUT:
-            print("\n[UI] Browser tab closed — shutting down.")
+            print("\n[UI] Browser tab closed - shutting down.")
             _cleanup_pdfs()
             os._exit(0)
 
@@ -529,5 +529,5 @@ if __name__ == "__main__":
     t = threading.Timer(1.2, _open_browser)
     t.daemon = True
     t.start()
-    print("Yacht IQ Input Bot → http://localhost:5000")
+    print("Yacht IQ Input Bot -> http://localhost:5000")
     app.run(host="127.0.0.1", port=5000, debug=False, use_reloader=False)
