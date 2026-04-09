@@ -752,63 +752,47 @@ def _join_wrapped_lines(lines: list[str]) -> list[str]:
 
 def write_equipment_content(panel, page, structured: list[tuple[str, list[str]]]):
     """
-    Write categorised equipment content into a Lexical editor via HTML clipboard paste.
+    Write categorised equipment content into a Lexical editor line by line.
 
-    Builds an HTML string where category headers are <strong> and content
-    lines are plain paragraphs prefixed with '• '.  Writes both HTML and
-    plain-text representations to the system clipboard via the ClipboardItem
-    API, then pastes with Ctrl+V so Lexical receives rich formatting and
-    renders headers in bold.
-
-    structured: [(category_name, [content_lines]), ...]
-      - category_name non-empty → <p><strong>name</strong></p>
-      - content_lines           → <p>• line</p>
+    Each content line is typed with a literal '• ' prefix already in the text
+    (no toolbar bullet formatting).  Category headers are typed as plain text
+    on their own line.  The editor is cleared first with Ctrl+A → Backspace →
+    Backspace (second press strips any residual bullet/list formatting).
     """
-    import html as _html
-
-    html_parts: list[str] = []
-    plain_parts: list[str] = []
-
+    # Build flat list of (kind, text): 'header' or 'bullet'
+    output_lines: list[tuple[str, str]] = []
     for cat_name, lines in structured:
         if cat_name:
             print(f"    [H] {cat_name}")
-            html_parts.append(f"<p><strong>{_html.escape(cat_name)}</strong></p>")
-            plain_parts.append(cat_name)
+            output_lines.append(("header", cat_name))
         for line in _join_wrapped_lines(lines):
             line = _strip_category_prefix(line, cat_name)
             line = _normalize_quantity(line)
             print(f"    [ ] {line[:90]}")
-            html_parts.append(f"<p>• {_html.escape(line)}</p>")
-            plain_parts.append("• " + line)
+            output_lines.append(("bullet", line))
 
-    html_content  = "\n".join(html_parts)
-    plain_content = "\n".join(plain_parts)
-
-    # Write HTML + plain text to clipboard via ClipboardItem API
-    page.evaluate("""
-        async ([html, plain]) => {
-            await navigator.clipboard.write([
-                new ClipboardItem({
-                    'text/html':  new Blob([html],  {type: 'text/html'}),
-                    'text/plain': new Blob([plain], {type: 'text/plain'}),
-                })
-            ]);
-        }
-    """, [html_content, plain_content])
-    page.wait_for_timeout(200)
+    if not output_lines:
+        return
 
     editor = panel.locator("[contenteditable='true']").first
     editor.click(force=True)
     page.wait_for_timeout(150)
 
-    # Clear editor content via JS — avoids Ctrl+A selecting the whole page
-    editor.evaluate("el => { el.innerHTML = ''; el.focus(); }")
-    page.wait_for_timeout(150)
+    # Clear existing content + strip any residual list/bullet formatting
+    page.keyboard.press("Control+A")
+    page.keyboard.press("Backspace")
+    page.keyboard.press("Backspace")
+    page.wait_for_timeout(100)
 
-    # Single paste event — Lexical receives the HTML and renders bold headers
-    page.keyboard.press("Control+V")
-    page.wait_for_timeout(800)
+    for i, (kind, text) in enumerate(output_lines):
+        if kind == "bullet":
+            page.keyboard.insert_text("• " + text)
+        else:
+            page.keyboard.insert_text(text)
+        if i < len(output_lines) - 1:
+            page.keyboard.press("Enter")
 
+    page.wait_for_timeout(200)
     panel.locator("[data-testid='texteditor-toolbar-save-button']").first.click()
     page.wait_for_timeout(800)
 
@@ -1898,18 +1882,21 @@ with sync_playwright() as p:
 
         editor = section.locator(f"[data-testid='{testid}']").first
         editor.click(force=True)
-        section.locator("[data-testid='toolbar-list-ul']").first.click()
+        page.wait_for_timeout(150)
 
+        # Clear text and any residual bullet/list formatting
         page.keyboard.press("Control+A")
         page.keyboard.press("Backspace")
+        page.keyboard.press("Backspace")
+        page.wait_for_timeout(100)
 
-        for i, item in enumerate(bullets):
-            if not has_value(item):
-                continue
-            page.keyboard.insert_text(str(item))
-            if i < len(bullets) - 1:
+        valid_bullets = [str(b) for b in bullets if has_value(b)]
+        for i, item in enumerate(valid_bullets):
+            page.keyboard.insert_text(item)
+            if i < len(valid_bullets) - 1:
                 page.keyboard.press("Enter")
 
+        page.wait_for_timeout(200)
         section.locator("[data-testid='texteditor-toolbar-save-button']").first.click()
 
         if heading == "Other Machinery":
