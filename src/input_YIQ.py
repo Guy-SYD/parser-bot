@@ -1289,7 +1289,16 @@ with sync_playwright() as p:
 
     clicked = _click_edit_button(page)
     if not clicked:
+        # Dump all visible buttons to help diagnose
         page.screenshot(path="output/edit_button_debug.png")
+        all_btns = page.locator("button")
+        print(f"[DEBUG] {all_btns.count()} total buttons on page:")
+        for i in range(min(all_btns.count(), 20)):
+            b = all_btns.nth(i)
+            try:
+                print(f"  [{i}] visible={b.is_visible()} class={b.get_attribute('class')!r} text={b.inner_text()[:40]!r}")
+            except Exception:
+                pass
         raise RuntimeError(
             "Could not find the Edit button on the page.\n"
             "A screenshot has been saved to output/edit_button_debug.png for inspection."
@@ -1298,6 +1307,15 @@ with sync_playwright() as p:
         page.locator("input.ant-input-number-input").first.wait_for(state="visible", timeout=8000)
     except PlaywrightTimeoutError:
         page.screenshot(path="output/edit_button_debug.png")
+        # Dump all visible buttons to help diagnose
+        all_btns = page.locator("button")
+        print(f"[DEBUG] Edit mode did not activate. {all_btns.count()} buttons on page:")
+        for i in range(min(all_btns.count(), 20)):
+            b = all_btns.nth(i)
+            try:
+                print(f"  [{i}] visible={b.is_visible()} class={b.get_attribute('class')!r} text={b.inner_text()[:40]!r}")
+            except Exception:
+                pass
         raise RuntimeError(
             "Edit mode did not activate — the page may have redirected after login expired.\n"
             "A screenshot has been saved to output/edit_button_debug.png.\n"

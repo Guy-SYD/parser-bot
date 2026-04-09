@@ -126,6 +126,11 @@ HEADING_TO_SUBTAB: dict[str, str | None] = {
     "navigation and communication systems":         "NAVIGATION EQUIPMENT",
     "navigation systems":                           "NAVIGATION EQUIPMENT",
     "navigation equipment":                         "NAVIGATION EQUIPMENT",
+    "electronics & navigation":                     "NAVIGATION EQUIPMENT",
+    "electronics and navigation":                   "NAVIGATION EQUIPMENT",
+    "electronics & navigation equipment":           "NAVIGATION EQUIPMENT",
+    "electronics and navigation equipment":         "NAVIGATION EQUIPMENT",
+    "main helm":                                    "NAVIGATION EQUIPMENT",
 
     # ── ENTERTAINMENT EQUIPMENT ──────────────────────────────────────────────
     "entertainment, audio/visual and it systems":   "ENTERTAINMENT EQUIPMENT",
@@ -159,6 +164,14 @@ HEADING_TO_SUBTAB: dict[str, str | None] = {
     "deck equipment":                               "DECK EQUIPMENT",
     "deck machinery":                               "DECK EQUIPMENT",
     "deck amenities":                               "DECK EQUIPMENT",
+    "deck/exterior":                                "DECK EQUIPMENT",
+    "deck / exterior":                              "DECK EQUIPMENT",
+    "deck & exterior":                              "DECK EQUIPMENT",
+    "deck and exterior":                            "DECK EQUIPMENT",
+    "cockpit/aft deck":                             "DECK EQUIPMENT",
+    "cockpit / aft deck":                           "DECK EQUIPMENT",
+    "cockpit & aft deck":                           "DECK EQUIPMENT",
+    "cockpit and aft deck":                         "DECK EQUIPMENT",
 
     # ── SAFETY & SECURITY EQUIPMENT ─────────────────────────────────────────
     "safety, security, & firefighting equipment":   "SAFETY & SECURITY EQUIPMENT",
@@ -249,7 +262,7 @@ _SKIP_PATTERNS = [
     r"^systems$",
     r"^equipment$",
     # Standalone bullet/symbol characters (regular string so Unicode escapes resolve)
-    "^[\uf0a8\uf0b7\u2022\u2023\u25e6\u25aa\u25cf\u2219\u00b7\u2013\u2014\u2012?*\-]$",
+    "^[\uf0a8\uf0b7\u2022\u2023\u25e6\u25aa\u25cf\u2219\u00b7\u2013\u2014\u2012?*\\-]$",
     # Repeated page headers (BF brochure format)
     r"^for sale\b",
     r"^for sale - specifications$",
@@ -312,13 +325,6 @@ _ALWAYS_SKIP_HEADINGS = {
     "interior accommodation",
     "accommodations",
     "accommodation",
-    "cockpit/aft deck",
-    "cockpit / aft deck",
-    "deck/exterior",
-    "deck / exterior",
-    "main helm",
-    "electronics & navigation",
-    "electronics and navigation",
     "mechanical/engine room",
     "mechanical / engine room",
     "engine room",
