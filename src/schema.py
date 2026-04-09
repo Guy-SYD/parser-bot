@@ -158,8 +158,7 @@ class YachtData(BaseModel):
     GENERATOR_4_DATE: str = ""
     GENERATOR_4_LOCATION: str = ""
 
-    STABILIZER_MANUFACTURER: str = ""
-    STABILIZER_MODEL: str = ""
+    STABILIZER: str = ""
     STABILIZER_TYPE: str = ""
     STABILIZER_SPEED: str = ""
 

@@ -1117,7 +1117,7 @@ def extract_machinery_fields_from_lines(lines: list[str]) -> dict:
     results = {}
 
     fields = [
-        "STABILIZER_MANUFACTURER",
+        "STABILIZER",
         "STABILIZER_TYPE",
         "STABILIZER_SPEED",
         "BOW_THRUSTER",
@@ -1126,6 +1126,9 @@ def extract_machinery_fields_from_lines(lines: list[str]) -> dict:
         "SHAFTS_PROPELLERS",
         "SHORE_POWER",
         "GEARBOX",
+        "HELICOPTER",
+        "LIFT_CAPABLE",
+        "WHEELCHAIR_ACCESSIBLE",
     ]
 
     for field_name in fields:

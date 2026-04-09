@@ -1129,14 +1129,31 @@ with sync_playwright() as p:
     page = context.new_page()
 
     page.goto(YACHT_URL, wait_until="load")
-    page.locator("button.ant-btn-icon-only").first.wait_for(state="visible", timeout=15000)
+
+    try:
+        page.locator("button.ant-btn-icon-only").first.wait_for(state="visible", timeout=15000)
+    except PlaywrightTimeoutError:
+        pass  # may be on login page — check below
 
     if is_on_login_page(page):
         do_login(page, context, YACHT_URL)
 
+    # Verify we landed on the correct yacht page (not redirected to home/dashboard)
+    if not page.url.startswith("https://yachtiq.io/#/yacht/"):
+        raise RuntimeError(
+            f"Session may have expired — landed on unexpected URL: {page.url}\n"
+            f"Delete auth/state.json and re-run to force a fresh login."
+        )
+
     # Edit
     page.locator("button.ant-btn-icon-only").first.click()
-    page.locator("input.ant-input-number-input").first.wait_for(state="visible", timeout=8000)
+    try:
+        page.locator("input.ant-input-number-input").first.wait_for(state="visible", timeout=8000)
+    except PlaywrightTimeoutError:
+        raise RuntimeError(
+            "Edit mode did not activate — the page may have redirected after login expired.\n"
+            "Delete auth/state.json and re-run to force a fresh login."
+        )
 
     # ---------------------------
     # GENERAL / SUMMARY
@@ -1236,6 +1253,41 @@ with sync_playwright() as p:
 
     page.get_by_role("tab", name="Dimensions").click()
     page.wait_for_timeout(200)
+
+    # LWL
+    if any_value(LWL_FT, LWL_IN, LWL_M):
+        lwl_section = page.locator(
+            "xpath=//label[contains(translate(normalize-space(.), 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), 'lwl')]/following-sibling::div[1]"
+        ).first
+
+        if has_value(LWL_FT):
+            lwl_ft_input = lwl_section.locator(
+                "xpath=.//span[contains(@class,'ant-input-affix-wrapper')][.//span[normalize-space()='ft']]//input"
+            ).first
+            fill_if_present(lwl_ft_input, LWL_FT)
+
+        if has_value(LWL_IN):
+            lwl_in_input = lwl_section.locator(
+                "xpath=.//span[contains(@class,'ant-input-affix-wrapper')][.//span[normalize-space()='in']]//input"
+            ).first
+            fill_if_present(lwl_in_input, LWL_IN)
+
+        if has_value(LWL_M):
+            lwl_unit_dropdown = lwl_section.locator(
+                "xpath=.//div[contains(@class,'ant-select') and contains(@class,'ant-select-compact-last-item')]"
+            ).first
+            select_dropdown_arrow_once(lwl_unit_dropdown, page)
+
+            page.wait_for_timeout(250)
+
+            lwl_section = page.locator(
+                "xpath=//label[contains(translate(normalize-space(.), 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), 'lwl')]/following-sibling::div[1]"
+            ).first
+
+            lwl_m_input = lwl_section.locator(
+                "xpath=.//span[contains(@class,'ant-input-affix-wrapper')][.//span[normalize-space()='m']]//input"
+            ).first
+            fill_if_present(lwl_m_input, LWL_M)
 
     # Beam
     if any_value(BEAM_FT, BEAM_IN, BEAM_M):
@@ -1400,6 +1452,28 @@ with sync_playwright() as p:
             field_name="Superstructure Material",
             allow_best_visible_match=True,
             min_best_match_score=0.4,
+        )
+
+    if has_value(HULL_COLOR):
+        hull_color_block = get_block_by_label(page, "Hull Color")
+        select_dropdown_by_typing(
+            hull_color_block.locator("div.ant-select").first,
+            HULL_COLOR,
+            page,
+            field_name="Hull Color",
+            allow_best_visible_match=True,
+            min_best_match_score=0.5,
+        )
+
+    if has_value(RIG_TYPE):
+        rig_type_block = get_block_by_label(page, "Rig type")
+        select_dropdown_by_typing(
+            rig_type_block.locator("div.ant-select").first,
+            RIG_TYPE,
+            page,
+            field_name="Rig type",
+            allow_best_visible_match=True,
+            min_best_match_score=0.65,
         )
 
     if has_value(EXTERIOR_DESIGNER):
@@ -1708,7 +1782,7 @@ with sync_playwright() as p:
 
 
         # Stabilizer
-    if any_value(STABILIZER_MANUFACTURER, STABILIZER_TYPE, STABILIZER_SPEED):
+    if any_value(STABILIZER, STABILIZER_TYPE, STABILIZER_SPEED):
         stabilizer_section = page.locator(
             "xpath=//h3[contains(normalize-space(.), 'Stabilizer')]/ancestor::div[contains(@class,'border-t')][1]"
         ).first
@@ -1716,13 +1790,14 @@ with sync_playwright() as p:
         if stabilizer_section.count() == 0:
             print("[MISS] Stabilizer section not found")
         else:
-            if has_value(STABILIZER_MANUFACTURER):
-                manufacturer_block = get_card_by_label_text(stabilizer_section, "manufacturer")
-                if manufacturer_block is None:
-                    print("[MISS] Stabilizer Manufacturer: card not found")
+            if has_value(STABILIZER):
+                stabilizer_block = get_card_by_label_text(stabilizer_section, "stabilizer")
+                if stabilizer_block is None:
+                    stabilizer_block = get_card_by_label_text(stabilizer_section, "make / model")
+                if stabilizer_block is None:
+                    print("[MISS] Stabilizer make/model: card not found")
                 else:
-                    manufacturer_input = manufacturer_block.locator("input").first
-                    fill_if_present(manufacturer_input, STABILIZER_MANUFACTURER)
+                    fill_if_present(stabilizer_block.locator("input").first, STABILIZER)
 
             if has_value(STABILIZER_TYPE):
                 type_block = get_card_by_label_text(stabilizer_section, "type")
@@ -1781,6 +1856,23 @@ with sync_playwright() as p:
                     fill_if_present(input_box, value)
 
 
+
+    # Helicopter / Lift Capable / Wheelchair Accessible
+    for field_value, label_text in [
+        (HELICOPTER,           "HELICOPTER"),
+        (LIFT_CAPABLE,         "LIFT CAPABLE"),
+        (WHEELCHAIR_ACCESSIBLE,"WHEELCHAIR ACCESSIBLE"),
+    ]:
+        if has_value(field_value):
+            dropdown = page.locator("div.flex.flex-col").filter(
+                has=page.locator(f"label:text-is('{label_text}')")
+            ).first.locator("div.ant-select").first
+            select_dropdown_by_typing(
+                dropdown,
+                field_value,
+                page,
+                field_name=label_text.title(),
+            )
 
     # Richtext sections
     richtext_sections = [

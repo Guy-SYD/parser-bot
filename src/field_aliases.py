@@ -489,16 +489,12 @@ UNIT_FIELD_ALIASES = {
 }
 
 MACHINERY_FIELD_ALIASES = {
-    "STABILIZER_MANUFACTURER": [
-        "stabilizer manufacturer",
-        "stabiliser manufacturer",
+    "STABILIZER": [
         "stabilizers",
         "stabilisers",
+        "stabilizer",
+        "stabiliser",
         "fins",
-    ],
-    "STABILIZER_MODEL": [
-        "stabilizer model",
-        "stabiliser model",
     ],
     "STABILIZER_TYPE": [
         "stabilizer type",
