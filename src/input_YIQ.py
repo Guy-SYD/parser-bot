@@ -57,6 +57,7 @@ MAX_GENERATORS = 4
 DROPDOWN_MISSES = []
 FIELD_MISSES = []
 DROPDOWN_NEAR_MATCHES = []
+MAKE_FALLBACKS = []  # make prepended to model because dropdown had no match
 
 
 def identify_parser_source(traceback_text: str) -> str:
@@ -935,24 +936,33 @@ def fill_engine_like_block(
     output_unit=None,
     preserve_existing_output_unit=False,
 ):
+    make_selected = False
     if has_value(data.get("make")):
         make_block = get_row_field_card(block, "Engine make")
         if make_block is None:
             print(f"[MISS] {row_name}: field not found -> Engine make")
         else:
-            select_dropdown_by_typing(
+            make_selected = select_dropdown_by_typing(
                 make_block.locator("div.ant-select").first,
                 data["make"],
                 page,
                 field_name=f"{row_name} - Engine make"
             )
+            if not make_selected:
+                print(f"  [{row_name}] Make '{data['make']}' not in dropdown — will prepend to model")
 
-    if has_value(data.get("model")):
+    model_value = data.get("model", "")
+    if has_value(data.get("make")) and not make_selected:
+        # Make wasn't accepted by the dropdown — prepend it to model
+        model_value = f"{data['make']} {model_value}".strip() if has_value(model_value) else data["make"]
+        MAKE_FALLBACKS.append({"row": row_name, "make": data["make"], "model": model_value})
+
+    if has_value(model_value):
         model_block = get_row_field_card(block, "Engine model")
         if model_block is None:
             print(f"[MISS] {row_name}: field not found -> Engine model")
         else:
-            fill_if_present(model_block.locator("input").first, data["model"])
+            fill_if_present(model_block.locator("input").first, model_value)
 
     if has_value(data.get("type")):
         type_block = get_row_field_card(block, "Engine type")
@@ -2090,6 +2100,13 @@ with sync_playwright() as p:
             print(f"- {miss['field']} -> {miss['reason']}")
     else:
         print("\nNo field misses recorded.")
+
+    if MAKE_FALLBACKS:
+        print("\n[ATTENTION] Engine/generator makes not found in dropdown — prepended to model:")
+        for fb in MAKE_FALLBACKS:
+            print(f"- {fb['row']}: make '{fb['make']}' not in dropdown -> model set to '{fb['model']}'")
+    else:
+        print("\nAll engine/generator makes matched dropdown.")
 
     if getattr(args, 'no_review', False):
         # Called from the UI — leave the browser open for manual review & save.
