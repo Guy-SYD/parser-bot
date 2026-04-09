@@ -13,9 +13,11 @@ Output from both steps is streamed live to the browser.
 """
 
 import atexit
+import os
 import subprocess
 import sys
 import threading
+import time
 import webbrowser
 from pathlib import Path
 
@@ -35,6 +37,23 @@ def _cleanup_pdfs():
         p.unlink(missing_ok=True)
 
 atexit.register(_cleanup_pdfs)
+
+# ---------------------------------------------------------------------------
+# Heartbeat watchdog — shuts down the process when the browser tab closes
+# ---------------------------------------------------------------------------
+_last_ping   = None          # None = page not yet loaded
+_PING_TIMEOUT = 8            # seconds without a ping → shut down
+
+def _watchdog():
+    while True:
+        time.sleep(2)
+        if _last_ping is not None and (time.time() - _last_ping) > _PING_TIMEOUT:
+            print("\n[UI] Browser tab closed — shutting down.")
+            _cleanup_pdfs()
+            os._exit(0)
+
+_wd = threading.Thread(target=_watchdog, daemon=True)
+_wd.start()
 
 app = Flask(__name__)
 
@@ -102,16 +121,34 @@ PAGE = """<!DOCTYPE html>
     position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%;
   }
   .upload-text { font-size: .9rem; color: #888; pointer-events: none; }
-  .filename {
-    margin-top: 8px; font-size: .85rem; color: #785f47; font-weight: 500;
-    min-height: 1.2em; display: flex; align-items: center; gap: 6px;
+
+  /* Filename pill — sits BELOW the upload area, outside the form */
+  .filename-pill {
+    display: none;
+    align-items: center;
+    gap: 8px;
+    margin-top: 10px;
+    padding: 7px 12px;
+    background: #f5f0ec;
+    border-radius: 6px;
+    font-size: .85rem;
+    color: #785f47;
+    font-weight: 500;
   }
-  .filename-text { flex: 1; }
+  .filename-pill.visible { display: flex; }
+  .filename-pill-text { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .delete-pdf-btn {
-    background: none; border: none; cursor: pointer; padding: 0 2px;
-    color: #aaa; font-size: 1rem; line-height: 1; flex-shrink: 0;
+    flex-shrink: 0;
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 1rem;
+    line-height: 1;
+    color: #a08060;
+    padding: 2px 4px;
+    border-radius: 4px;
   }
-  .delete-pdf-btn:hover { color: #9b2335; }
+  .delete-pdf-btn:hover { background: #e8d8cc; color: #9b2335; }
 
   /* Toggle */
   .toggle-row {
@@ -176,16 +213,18 @@ PAGE = """<!DOCTYPE html>
 <div class="card">
   <h1><span>Yacht IQ</span> Input Bot</h1>
 
+  <!-- Filename pill lives OUTSIDE the form so nothing interferes with it -->
+  <div class="filename-pill" id="filename-pill">
+    <span class="filename-pill-text" id="filename-text"></span>
+    <button type="button" class="delete-pdf-btn" id="delete-pdf-btn" title="Remove PDF">&#x2715;</button>
+  </div>
+
   <form id="run-form" enctype="multipart/form-data">
     <div class="field">
       <label>PDF Specification</label>
       <div class="upload-area">
-        <input type="file" name="pdf" id="pdf-input" accept=".pdf" required>
+        <input type="file" name="pdf" id="pdf-input" accept=".pdf">
         <div class="upload-text">Click to browse or drag &amp; drop a PDF</div>
-      </div>
-      <div class="filename" id="filename-display">
-        <span class="filename-text" id="filename-text"></span>
-        <button type="button" class="delete-pdf-btn" id="delete-pdf-btn" title="Delete PDF" style="display:none">✕</button>
       </div>
     </div>
 
@@ -217,32 +256,59 @@ PAGE = """<!DOCTYPE html>
 </div>
 
 <script>
-function setFilename(name) {
+// ── Heartbeat: keep server alive; stopping pings signals tab-close ──────────
+setInterval(() => fetch('/ping', { method: 'POST', keepalive: true }), 2000);
+
+// ── Filename pill helpers ─────────────────────────────────────────────────
+// _serverPdf  = name of PDF currently saved in samples/ (null if none)
+// _localFile  = File object the user just selected (null if none)
+let _serverPdf = null;
+let _localFile = null;
+
+function _updatePill() {
+  const pill = document.getElementById('filename-pill');
   const text = document.getElementById('filename-text');
-  const btn  = document.getElementById('delete-pdf-btn');
-  text.textContent = name || '';
-  btn.style.display = name ? 'inline-flex' : 'none';
+  const name = _localFile ? _localFile.name : _serverPdf;
+  if (name) {
+    text.textContent = name;
+    pill.classList.add('visible');
+  } else {
+    text.textContent = '';
+    pill.classList.remove('visible');
+  }
 }
 
-// On load: show any PDF already in samples/
-fetch('/current-pdf').then(r => r.json()).then(d => { if (d.name) setFilename(d.name); });
+// On load: check for PDF already in samples/
+fetch('/current-pdf').then(r => r.json()).then(d => {
+  _serverPdf = d.name || null;
+  _updatePill();
+});
 
-// Filename display on new upload
+// New file selected
 document.getElementById('pdf-input').addEventListener('change', function() {
-  setFilename(this.files[0] ? this.files[0].name : '');
+  _localFile = this.files[0] || null;
+  _updatePill();
 });
 
-// Delete button
+// Delete / clear
 document.getElementById('delete-pdf-btn').addEventListener('click', function() {
-  fetch('/delete-pdf', { method: 'POST' }).then(r => {
-    if (r.ok) {
-      setFilename('');
-      document.getElementById('pdf-input').value = '';
-    }
-  });
+  if (_serverPdf) {
+    fetch('/delete-pdf', { method: 'POST' }).then(r => {
+      if (r.ok) {
+        _serverPdf = null;
+        _localFile = null;
+        document.getElementById('pdf-input').value = '';
+        _updatePill();
+      }
+    });
+  } else {
+    _localFile = null;
+    document.getElementById('pdf-input').value = '';
+    _updatePill();
+  }
 });
 
-// Toggle label
+// ── Toggle label ─────────────────────────────────────────────────────────
 const equipToggle = document.getElementById('equip-toggle');
 const toggleState = document.getElementById('toggle-state');
 equipToggle.addEventListener('change', function() {
@@ -250,9 +316,15 @@ equipToggle.addEventListener('change', function() {
   toggleState.className = 'toggle-state' + (this.checked ? ' on' : '');
 });
 
-// Form submit → stream output
+// ── Form submit → stream output ──────────────────────────────────────────
 document.getElementById('run-form').addEventListener('submit', async function(e) {
   e.preventDefault();
+
+  // Must have either a freshly-selected file or a server-side PDF
+  if (!_localFile && !_serverPdf) {
+    alert('Please select a PDF first.');
+    return;
+  }
 
   const btn     = document.getElementById('run-btn');
   const logWrap = document.getElementById('log-wrap');
@@ -267,6 +339,10 @@ document.getElementById('run-form').addEventListener('submit', async function(e)
   btn.textContent = 'Running\u2026';
 
   const formData = new FormData(this);
+  // If no new file was chosen but a server PDF exists, tell the server to reuse it
+  if (!_localFile && _serverPdf) {
+    formData.set('reuse_pdf', _serverPdf);
+  }
 
   try {
     const resp = await fetch('/run', { method: 'POST', body: formData });
@@ -301,6 +377,14 @@ document.getElementById('run-form').addEventListener('submit', async function(e)
         logEl.appendChild(span);
         logEl.scrollTop = logEl.scrollHeight;
       });
+    }
+
+    // After a successful run, the PDF is still on the server — update state
+    if (!hadError && _localFile) {
+      _serverPdf = _localFile.name;
+      _localFile = null;
+      document.getElementById('pdf-input').value = '';
+      _updatePill();
     }
 
     showDone(!hadError);
@@ -338,20 +422,38 @@ def index():
     return render_template_string(PAGE)
 
 
+@app.route("/ping", methods=["POST"])
+def ping():
+    global _last_ping
+    _last_ping = time.time()
+    return Response("", status=204)
+
+
 @app.route("/run", methods=["POST"])
 def run():
-    pdf_file         = request.files.get("pdf")
-    yacht_id         = request.form.get("yacht_id", "").strip()
+    pdf_file   = request.files.get("pdf")
+    reuse_name = request.form.get("reuse_pdf", "").strip()
+    yacht_id   = request.form.get("yacht_id", "").strip()
     include_equipment = request.form.get("include_equipment") == "on"
 
-    if not pdf_file or not pdf_file.filename:
-        return Response("No PDF uploaded.", status=400)
     if not yacht_id:
         return Response("No YachtIQ ID provided.", status=400)
 
-    safe_name = Path(pdf_file.filename).name
-    pdf_path  = SAMPLES_DIR / safe_name
-    pdf_file.save(str(pdf_path))
+    # Determine which PDF to use
+    if pdf_file and pdf_file.filename:
+        safe_name = Path(pdf_file.filename).name
+        pdf_path  = SAMPLES_DIR / safe_name
+        # Remove any previously stored PDFs before saving the new one
+        for old in SAMPLES_DIR.glob("*.pdf"):
+            if old.name != safe_name:
+                old.unlink(missing_ok=True)
+        pdf_file.save(str(pdf_path))
+    elif reuse_name:
+        pdf_path = SAMPLES_DIR / Path(reuse_name).name
+        if not pdf_path.exists():
+            return Response("Stored PDF not found. Please re-upload.", status=400)
+    else:
+        return Response("No PDF provided.", status=400)
 
     def generate():
         # Step 1 — PDF parser
@@ -410,8 +512,7 @@ def current_pdf():
 
 @app.route("/delete-pdf", methods=["POST"])
 def delete_pdf():
-    pdfs = [p for p in SAMPLES_DIR.iterdir() if p.is_file() and p.suffix.lower() == ".pdf"]
-    for p in pdfs:
+    for p in SAMPLES_DIR.glob("*.pdf"):
         p.unlink(missing_ok=True)
     return Response("", status=204)
 
