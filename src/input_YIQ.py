@@ -1261,13 +1261,46 @@ with sync_playwright() as p:
             f"Delete auth/state.json and re-run to force a fresh login."
         )
 
-    # Edit
-    page.locator("button.ant-btn-icon-only").first.click()
+    # Edit — try several selectors in order of specificity
+    def _click_edit_button(page) -> bool:
+        candidates = [
+            # Explicit edit/pencil aria label
+            "button[aria-label='edit']",
+            "button[aria-label='Edit']",
+            # Ant Design icon button containing an SVG edit/pencil icon
+            "button.ant-btn-icon-only:has(span[aria-label='edit'])",
+            "button.ant-btn-icon-only:has(span[aria-label='form'])",
+            # Icon-only button that is NOT the bronze dropdown trigger
+            "button.ant-btn-icon-only:not(.bg-bronze):not(.ant-dropdown-trigger)",
+            # Fallback: any visible icon-only button
+            "button.ant-btn-icon-only",
+        ]
+        for sel in candidates:
+            try:
+                btns = page.locator(sel)
+                for i in range(btns.count()):
+                    btn = btns.nth(i)
+                    if btn.is_visible():
+                        btn.click()
+                        return True
+            except Exception:
+                continue
+        return False
+
+    clicked = _click_edit_button(page)
+    if not clicked:
+        page.screenshot(path="output/edit_button_debug.png")
+        raise RuntimeError(
+            "Could not find the Edit button on the page.\n"
+            "A screenshot has been saved to output/edit_button_debug.png for inspection."
+        )
     try:
         page.locator("input.ant-input-number-input").first.wait_for(state="visible", timeout=8000)
     except PlaywrightTimeoutError:
+        page.screenshot(path="output/edit_button_debug.png")
         raise RuntimeError(
             "Edit mode did not activate — the page may have redirected after login expired.\n"
+            "A screenshot has been saved to output/edit_button_debug.png.\n"
             "Delete auth/state.json and re-run to force a fresh login."
         )
 
