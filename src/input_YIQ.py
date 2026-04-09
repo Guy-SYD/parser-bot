@@ -1037,10 +1037,12 @@ def fill_engine_like_block(
             if has_value(existing_date_val):
                 print(f"  [{row_name}] Clearing stale hours/date ({existing_date_val!r})")
             hours_input = hours_block.locator("input.ant-input-number-input, input").first
-            hours_input.triple_click()
+            hours_input.click()
+            page.keyboard.press("Control+A")
             page.keyboard.press("Backspace")
 
-            existing_date_input.triple_click()
+            existing_date_input.click()
+            page.keyboard.press("Control+A")
             page.keyboard.press("Backspace")
 
             # Fill new values only if we have a date to go with the hours
