@@ -5,6 +5,13 @@ FIELD_ALIASES = {
         "overall length",
         "loa (m/ft)",
         "loa (ft/m)",
+        "length o.a.",
+        "length o.a",
+        "length oa",
+        "length o/a",
+        "l.o.a.",
+        "l.o.a",
+        "length",
     ],
 
     "LWL": [

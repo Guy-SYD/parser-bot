@@ -89,7 +89,12 @@ def extract_after_label(line: str, alias: str) -> str | None:
     escaped = re.escape(alias)
     patterns = [
         rf"^\s*{escaped}\s*[:\-]\s*(.+)$",
-        rf"^\s*{escaped}\s+(.+)$",
+        # Pattern 2: alias at start of line without colon — value MUST start with digit
+        # (prevents "Length W.L. 43.68m" from matching the bare "length" alias)
+        rf"^\s*{escaped}\s+(\d.+)$",
+        # label mid-line without colon, value starts with a digit
+        # e.g. "DIMENSIONS Length O.A. 51m (167'3ft)"
+        rf"(?<!\w){escaped}(?!\w)\s+(\d[^\t]*?)(?:\s{{2,}}|\s+[A-Z]{{3,}}|$)",
     ]
 
     for pattern in patterns:

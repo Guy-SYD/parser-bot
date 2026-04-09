@@ -1,8 +1,8 @@
 import re
 
 
-ENGINE_LABELS = ["main engines", "engines", "engine"]
-GENERATOR_LABELS = ["generators", "generator", "gensets", "genset"]
+ENGINE_LABELS = ["main engines", "main engine", "engines", "engine"]
+GENERATOR_LABELS = ["main generators", "main generator", "generators", "generator", "gensets", "genset"]
 
 KNOWN_ENGINE_MAKES = [
     "Caterpillar",
@@ -160,7 +160,15 @@ def normalize_quantity_prefix(text: str) -> str:
 def line_has_equipment_label(line: str, labels: list[str]) -> bool:
     lower = line.lower()
     for label in labels:
+        # Standard format: "Main Engines: ..." or "Engines - ..."
         if re.search(rf"\b{re.escape(label)}\b\s*[:\-]", lower):
+            return True
+        # No-colon format: multi-word label at start of line AND line contains a digit
+        # e.g. "MAIN ENGINES 2 x Caterpillar 3516B" or "Main Engine John Deere 6068SFM50"
+        # Single-word labels excluded to avoid "ENGINE HOURS" etc.
+        if (len(label.split()) > 1 and
+                re.match(rf"^{re.escape(label)}\s+\S", lower) and
+                re.search(r"\d", lower)):
             return True
     return False
 
@@ -196,7 +204,8 @@ def collect_equipment_blocks(lines: list[str], labels: list[str]) -> list[str]:
 def detect_count(text: str) -> int:
     lower = text.lower()
 
-    match = re.search(r"\(?(\d)\s*x\)?", lower)
+    # "2x", "2 x", "(2x)" etc.
+    match = re.search(r"\(?([2-4])\s*x\)?", lower)
     if match:
         return int(match.group(1))
 
@@ -209,6 +218,11 @@ def detect_count(text: str) -> int:
     if "single" in lower:
         return 1
 
+    # Standalone count before a word: "2 MAN", "3 Caterpillar" etc.
+    match = re.search(r"\b([2-4])\s+[a-z]", lower)
+    if match:
+        return int(match.group(1))
+
     return 1
 
 
@@ -218,6 +232,8 @@ def find_make(text: str, known_makes: list[str]) -> str:
             return make
     return ""
 
+
+_MODEL_LABEL_WORDS = {"model", "make", "type", "output", "hp", "kw", "kva", "fuel", "hours"}
 
 def find_model(text: str, make: str) -> str:
     if make:
@@ -229,22 +245,35 @@ def find_model(text: str, make: str) -> str:
         if match:
             candidate = match.group(1).strip(" ,/")
 
-            candidate = re.split(
-                r"\b\d+(?:\.\d+)?\s*(?:HP|KW|KVA)\b|"
-                r"\b(?:HP|KW|KVA|Diesel|Gasoline|Petrol|Inboard|Outboard|"
-                r"hrs?|hours?|Port|Starboard|generator|generators|genset|gensets|"
-                r"engine|engines|for|with)\b",
-                candidate,
-                maxsplit=1,
-                flags=re.IGNORECASE,
-            )[0].strip(" ,/")
+            # If the make is immediately followed by a label word like "Model:"
+            # (e.g. "Caterpillar Model: C32"), skip to the fallback below
+            if candidate.rstrip(": ").lower() in _MODEL_LABEL_WORDS:
+                candidate = ""
 
-            words = candidate.split()
-            if len(words) > 3:
-                candidate = " ".join(words[:3])
+            # Skip count-prefix candidates like "1x Marine" or "2x Something"
+            if candidate and re.match(r'^\d+x\s', candidate, flags=re.IGNORECASE):
+                candidate = ""
 
-            if candidate and len(candidate) <= 30:
-                return candidate
+            if candidate:
+                candidate = re.split(
+                    r"\b\d+(?:\.\d+)?\s*(?:HP|KW|KVA)\b|"
+                    r"\b(?:HP|KW|KVA|Diesel|Gasoline|Petrol|Inboard|Outboard|"
+                    r"hrs?|hours?|Port|Starboard|generator|generators|genset|gensets|"
+                    r"engine|engines|marine|for|with|range)\b",
+                    candidate,
+                    maxsplit=1,
+                    flags=re.IGNORECASE,
+                )[0].strip(" ,/")
+
+                words = candidate.split()
+                if len(words) > 3:
+                    candidate = " ".join(words[:3])
+
+                # Strip trailing standalone numbers (e.g. "3516B 2" from "3516B 2,447HP")
+                candidate = re.sub(r'(\s+\d+)+$', '', candidate).strip(" ,/")
+
+                if candidate and len(candidate) <= 30:
+                    return candidate
 
     fallback = re.search(r"\b([A-Z]{1,4}\d{1,4}[A-Z0-9\-]*)\b", text)
     return fallback.group(1) if fallback else ""
@@ -272,7 +301,9 @@ def rule_flag(rule_name: str, message: str, line: str = "") -> None:
 
 
 def find_engine_output_hp(text: str) -> str:
-    matches = re.findall(r"\b(\d+(?:\.\d+)?)\s*(HP|KW|KVA)\b", text, flags=re.IGNORECASE)
+    # Include optional thousands-separator: "2,447HP" → "2447"
+    matches = re.findall(r"\b(\d[\d,]*(?:\.\d+)?)\s*(HP|KW|KVA)\b", text, flags=re.IGNORECASE)
+    matches = [(v.replace(",", ""), u) for v, u in matches]
 
     if not matches:
         return ""
@@ -466,6 +497,24 @@ def extract_machinery_from_lines(lines: list[str]) -> dict:
 
     results.update(extract_machinery_fields_from_lines(lines))
 
+    # Fallback: explicit "Engine model: X" or "Engine make: X" labels in the PDF
+    # (e.g. Atlantis: "Engine model: MAN C V12")
+    _engine_model_patterns = [
+        r"engine\s+model\s*[:\-]\s*(.+)$",
+        r"engine\s+make\s*[:\-]\s*(.+)$",
+    ]
+    for line in lines:
+        if not results.get("ENGINE_1_MODEL"):
+            for pat in _engine_model_patterns:
+                m = re.search(pat, line, flags=re.IGNORECASE)
+                if m:
+                    raw = m.group(1).strip()
+                    make = results.get("ENGINE_1_MAKE", "")
+                    model = find_model(raw, make) if make else ""
+                    if model:
+                        results["ENGINE_1_MODEL"] = model
+                    break
+
     for i in range(1, 5):
         hours_key = f"ENGINE_{i}_HOURS"
         date_key = f"ENGINE_{i}_DATE"
@@ -476,6 +525,13 @@ def extract_machinery_from_lines(lines: list[str]) -> dict:
     return results
 MACHINERY_FIELD_ALIASES = {
     "STABILIZER": [
+        "stabilisers details",
+        "stabilizer details",
+        "stabiliser details",
+        "stabilisers make",
+        "stabilizer make",
+        "stabilisers manufacturer",
+        "stabilizer manufacturer",
         "stabilizers",
         "stabilisers",
         "stabilizer",
@@ -1159,6 +1215,17 @@ def extract_machinery_fields_from_lines(lines: list[str]) -> dict:
                         trimmed = normalize_stabilizer_speed(trimmed)
 
                     if trimmed:
+                        # STABILIZER should be a make/model, not a yes/no or
+                        # speed descriptor like "at anchor: Yes"
+                        if field_name == "STABILIZER":
+                            lower_trim = trimmed.lower()
+                            if (lower_trim in ("yes", "no") or
+                                    lower_trim.startswith("at anchor") or
+                                    lower_trim.startswith("underway") or
+                                    lower_trim.startswith("zero speed") or
+                                    lower_trim.endswith(": yes") or
+                                    lower_trim.endswith(": no")):
+                                continue
                         results[field_name] = trimmed
                         break
 

@@ -171,6 +171,51 @@ def main():
     save_json(result, "output/result.json")
     print("Done. Output saved to output/result.json")
 
+    _print_warnings(normalized_data)
+
+
+def _print_warnings(data: dict) -> None:
+    warnings = []
+
+    # Critical fields that should always be present
+    critical = [
+        ("LOA",         lambda d: d.get("LOA_M") or d.get("LOA_FT")),
+        ("BEAM",        lambda d: d.get("BEAM_M") or d.get("BEAM_FT")),
+        ("MAX_DRAFT",   lambda d: d.get("MAX_DRAFT_M") or d.get("MAX_DRAFT_FT")),
+        ("GT",          lambda d: d.get("GT")),
+        ("GUESTS",      lambda d: d.get("GUESTS")),
+        ("STATEROOMS",  lambda d: d.get("STATEROOMS")),
+        ("CREW",        lambda d: d.get("CREW")),
+        ("YACHT_TYPE",  lambda d: d.get("YACHT_TYPE")),
+    ]
+    for label, check in critical:
+        if not check(data):
+            warnings.append(f"  Missing: {label}")
+
+    # Engine count check — warn if only 1 engine found on a vessel >= 12m
+    loa_m = data.get("LOA_M", "")
+    try:
+        loa_val = float(loa_m) if loa_m else 0
+    except (ValueError, TypeError):
+        loa_val = 0
+
+    has_engine_1 = bool(data.get("ENGINE_1_MAKE") or data.get("ENGINE_1_OUTPUT_HP"))
+    has_engine_2 = bool(data.get("ENGINE_2_MAKE") or data.get("ENGINE_2_OUTPUT_HP"))
+    if has_engine_1 and not has_engine_2 and loa_val >= 12:
+        warnings.append("  Only 1 engine found - verify if vessel should have twin engines")
+
+    # Generator count check — warn if only 1 generator found on a vessel >= 20m
+    has_gen_1 = bool(data.get("GENERATOR_1_MAKE") or data.get("GENERATOR_1_OUTPUT"))
+    has_gen_2 = bool(data.get("GENERATOR_2_MAKE") or data.get("GENERATOR_2_OUTPUT"))
+    if has_gen_1 and not has_gen_2 and loa_val >= 20:
+        warnings.append("  Only 1 generator found - verify if vessel should have multiple generators")
+
+    if warnings:
+        print("\nWARNINGS:")
+        for w in warnings:
+            print(w)
+        print()
+
 
 if __name__ == "__main__":
     main()

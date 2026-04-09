@@ -47,7 +47,9 @@ def apply_make_model_split(results: dict, prefix: str, idx: int, rules: dict):
     if lookup in split_rules:
         replacement = split_rules[lookup]
         results[make_key] = replacement.get("MAKE", make_value)
-        results[model_key] = replacement.get("MODEL", model_value)
+        # Only override model if none was extracted; a real model (e.g. "D13") takes priority
+        if not model_value:
+            results[model_key] = replacement.get("MODEL", model_value)
 
 
 def apply_contains_field_replacement(field_name: str, value, rules: dict):

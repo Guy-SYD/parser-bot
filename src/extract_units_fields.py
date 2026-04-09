@@ -139,7 +139,11 @@ def extract_metric_and_imperial(value: str) -> tuple[str, str]:
         flags=re.IGNORECASE,
     )
     if g_match:
-        gallons = g_match.group(1).replace(",", "")
+        raw_gal = g_match.group(1).replace(",", "")
+        try:
+            gallons = str(int(Decimal(raw_gal).quantize(Decimal("1"), rounding=ROUND_HALF_UP)))
+        except Exception:
+            gallons = raw_gal
 
     return liters, gallons
 

@@ -68,6 +68,15 @@ HEADER_EXCLUSIONS = [
     "builder",
     "year",
     "refit",
+    "engines",
+    "engine",
+    "generators",
+    "generator",
+    "propulsion",
+    "dimensions",
+    "performance",
+    "tankage",
+    "capacities",
 ]
 
 
@@ -99,8 +108,13 @@ def get_aliases(field_name: str) -> list[str]:
 def match_label_in_line(line: str, alias: str) -> str | None:
     escaped = re.escape(alias)
     patterns = [
+        # label at start with colon/dash
         rf"^\s*{escaped}\s*[:\-]\s*(.+)$",
+        # label at start without colon (e.g. "LOA 51m")
         rf"^\s*{escaped}\s+(.+)$",
+        # label mid-line without colon, value starts with a digit
+        # e.g. "DIMENSIONS Length O.A. 51m (167ft)"
+        rf"(?<!\w){escaped}(?!\w)\s+(\d[^\t]*?)(?:\s{{2,}}|\s+[A-Z]{{3,}}|$)",
     ]
 
     for pattern in patterns:
@@ -220,14 +234,18 @@ def extract_after_label(line: str, alias: str) -> str | None:
     escaped = re.escape(alias)
 
     patterns = [
-        # label at start of line
+        # label at start of line with colon/dash separator
         rf"^\s*{escaped}\s*[:\-]\s*(.+)$",
 
-        # label appears later in the line, e.g. "... Crew Berths: 4"
+        # label anywhere in line with colon/dash, e.g. "... Crew Berths: 4"
         rf"(?<!\w){escaped}(?!\w)\s*[:\-]\s*(.+)$",
 
         # fallback for start-of-line labels without colon
         rf"^\s*{escaped}\s+(.+)$",
+
+        # label mid-line without colon, value starts with a digit
+        # e.g. "DIMENSIONS Length O.A. 51m (167ft)"
+        rf"(?<!\w){escaped}(?!\w)\s+(\d[^\t]*?)(?:\s{2,}|\s+[A-Z]{3,}|$)",
     ]
 
     for pattern in patterns:
@@ -288,6 +306,54 @@ def extract_basic_fields_from_lines(lines: list[str]) -> dict:
             if field_name in results:
                 break
 
+    # Fallback: scan all lines for "N guests" pattern if GUESTS not yet found
+    if "GUESTS" not in results:
+        for line in lines:
+            m = re.search(r"\b(\d+)\s+guests?\b", line, flags=re.IGNORECASE)
+            if m:
+                results["GUESTS"] = m.group(1)
+                break
+
+    # Fallback: infer YACHT_TYPE from strong type indicators when no labeled field found
+    if "YACHT_TYPE" not in results:
+        _motor_patterns = [
+            r"\bm/y\b",
+            r"\bmotor\s+yacht\b",
+            r"\bmotoryacht\b",
+            r"\bmotor\s*boat\b",
+            r"\bmotorboat\b",
+            r"\bpower\s*boat\b",
+            r"\bpowerboat\b",
+        ]
+        _sailing_patterns = [
+            r"\bs/y\b",
+            r"\bsailing\s+yachts?\b",
+            r"\bsail\s+yacht\b",
+            r"\bketch\b",
+            r"\bsloop\b",
+            r"\byawl\b",
+            r"\bschooner\b",
+            r"\bbrigantine\b",
+            r"\bcutter\b",
+        ]
+        motor_score = 0
+        sailing_score = 0
+        for line in lines:
+            low = line.lower()
+            for pat in _motor_patterns:
+                if re.search(pat, low):
+                    motor_score += 1
+                    break
+            for pat in _sailing_patterns:
+                if re.search(pat, low):
+                    sailing_score += 1
+                    break
+
+        if motor_score > sailing_score:
+            results["YACHT_TYPE"] = "Motor"
+        elif sailing_score > motor_score:
+            results["YACHT_TYPE"] = "Sailing"
+
     return results
 
 def expand_embedded_lines(lines: list[str]) -> list[str]:
@@ -311,5 +377,7 @@ def normalize_yacht_type(value: str) -> str:
         return "Motor"
     if "sailing" in lower or "sail" in lower:
         return "Sailing"
+    if any(w in lower for w in ("diesel", "power", "screw", "twin engine", "motor yacht")):
+        return "Motor"
 
     return ""
