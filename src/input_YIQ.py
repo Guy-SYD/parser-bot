@@ -1054,10 +1054,14 @@ def fill_engine_like_block(
         except Exception:
             existing_date_val = ""
 
-        if has_value(existing_date_val) and _date_within_6_months(existing_date_val):
-            print(f"  [{row_name}] Hours/date skipped — existing date {existing_date_val!r} is within 6 months")
+        nothing_to_write = not has_value(new_date_fmt) and not has_value(new_hours)
+
+        if nothing_to_write and not has_value(existing_date_val):
+            pass  # no new data, nothing on form — skip entirely to avoid opening date picker
+        elif has_value(existing_date_val) and _date_within_6_months(existing_date_val):
+            print(f"  [{row_name}] Hours/date skipped - existing date {existing_date_val!r} is within 6 months")
         else:
-            # Clear stale hours
+            # Clear stale hours (only if there is something to clear or something to write)
             if has_value(existing_date_val):
                 print(f"  [{row_name}] Clearing stale hours/date ({existing_date_val!r})")
             hours_input = hours_block.locator("input.ant-input-number-input, input").first
@@ -1065,9 +1069,11 @@ def fill_engine_like_block(
             page.keyboard.press("Control+A")
             page.keyboard.press("Backspace")
 
-            existing_date_input.click()
-            page.keyboard.press("Control+A")
-            page.keyboard.press("Backspace")
+            if has_value(existing_date_val):
+                existing_date_input.click()
+                page.keyboard.press("Control+A")
+                page.keyboard.press("Backspace")
+                page.keyboard.press("Escape")  # close picker if it opened
 
             # Fill new values only if we have a date to go with the hours
             if has_value(new_date_fmt) and has_value(new_hours):
@@ -1078,7 +1084,7 @@ def fill_engine_like_block(
                 page.wait_for_timeout(150)
                 print(f"  [{row_name}] Hours: {new_hours}, Date: {new_date_fmt}")
             elif has_value(new_hours):
-                print(f"  [{row_name}] Hours skipped — no date available to accompany them")
+                print(f"  [{row_name}] Hours skipped - no date available to accompany them")
     elif hours_block is None:
         print(f"[MISS] {row_name}: field not found -> Engine hours")
 

@@ -784,6 +784,11 @@ def extract_air_conditioning_lines(lines) -> list[str]:
         return section_lines
 
     # Fallback: capture any lines mentioning strong aircon indicators
+    # Exclude lines that just mention AC in passing (engine room, salon descriptions etc.)
+    _AIRCON_EXCLUDE = re.compile(
+        r"engine.room|salon|upgraded.to|full.air.cond|opens.to|stateroom|cabin|deck",
+        re.IGNORECASE,
+    )
     aircon_lines = []
 
     for line in lines:
@@ -802,6 +807,8 @@ def extract_air_conditioning_lines(lines) -> list[str]:
             or "air-conditioning" in norm
             or "hvac" in norm
         ):
+            if _AIRCON_EXCLUDE.search(raw):
+                continue
             aircon_lines.append(raw)
 
     deduped = []
