@@ -12,6 +12,7 @@ Steps performed on submit:
 Output from both steps is streamed live to the browser.
 """
 
+import atexit
 import subprocess
 import sys
 import threading
@@ -28,6 +29,12 @@ PYTHON      = str(Path(sys.executable))
 
 SAMPLES_DIR.mkdir(exist_ok=True)
 (BASE_DIR / "output").mkdir(exist_ok=True)
+
+def _cleanup_pdfs():
+    for p in SAMPLES_DIR.glob("*.pdf"):
+        p.unlink(missing_ok=True)
+
+atexit.register(_cleanup_pdfs)
 
 app = Flask(__name__)
 
@@ -214,7 +221,7 @@ function setFilename(name) {
   const text = document.getElementById('filename-text');
   const btn  = document.getElementById('delete-pdf-btn');
   text.textContent = name || '';
-  btn.style.display = name ? 'inline' : 'none';
+  btn.style.display = name ? 'inline-flex' : 'none';
 }
 
 // On load: show any PDF already in samples/

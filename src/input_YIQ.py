@@ -778,25 +778,9 @@ def write_equipment_content(panel, page, structured: list[tuple[str, list[str]]]
     editor.click(force=True)
     page.wait_for_timeout(150)
 
-    # Clear existing content
-    page.keyboard.press("Control+A")
-    page.keyboard.press("Backspace")
+    # Clear editor content via JS — avoids Ctrl+A selecting the whole page
+    editor.evaluate("el => { el.innerHTML = ''; el.focus(); }")
     page.wait_for_timeout(100)
-
-    # Reset any active formatting (bold, italic, list) the editor may have retained
-    # after clearing — click any active toolbar formatting buttons to deactivate them
-    page.evaluate("""() => {
-        document.querySelectorAll(
-            '[data-testid*="toolbar"] button, .toolbar-item'
-        ).forEach(btn => {
-            if (
-                btn.classList.contains('active') ||
-                btn.getAttribute('aria-pressed') === 'true' ||
-                btn.getAttribute('aria-checked') === 'true'
-            ) { btn.click(); }
-        });
-    }""")
-    page.wait_for_timeout(50)
 
     for i, (kind, text) in enumerate(output_lines):
         if kind == "header":
@@ -2002,10 +1986,8 @@ with sync_playwright() as p:
         editor.click(force=True)
         page.wait_for_timeout(150)
 
-        # Clear text and any residual bullet/list formatting
-        page.keyboard.press("Control+A")
-        page.keyboard.press("Backspace")
-        page.keyboard.press("Backspace")
+        # Clear via JS — avoids Ctrl+A selecting the whole page
+        editor.evaluate("el => { el.innerHTML = ''; el.focus(); }")
         page.wait_for_timeout(100)
 
         valid_bullets = [str(b) for b in bullets if has_value(b)]
