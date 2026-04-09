@@ -97,8 +97,14 @@ PAGE = """<!DOCTYPE html>
   .upload-text { font-size: .9rem; color: #888; pointer-events: none; }
   .filename {
     margin-top: 8px; font-size: .85rem; color: #785f47; font-weight: 500;
-    min-height: 1.2em;
+    min-height: 1.2em; display: flex; align-items: center; gap: 6px;
   }
+  .filename-text { flex: 1; }
+  .delete-pdf-btn {
+    background: none; border: none; cursor: pointer; padding: 0 2px;
+    color: #aaa; font-size: 1rem; line-height: 1; flex-shrink: 0;
+  }
+  .delete-pdf-btn:hover { color: #9b2335; }
 
   /* Toggle */
   .toggle-row {
@@ -170,7 +176,10 @@ PAGE = """<!DOCTYPE html>
         <input type="file" name="pdf" id="pdf-input" accept=".pdf" required>
         <div class="upload-text">Click to browse or drag &amp; drop a PDF</div>
       </div>
-      <div class="filename" id="filename-display"></div>
+      <div class="filename" id="filename-display">
+        <span class="filename-text" id="filename-text"></span>
+        <button type="button" class="delete-pdf-btn" id="delete-pdf-btn" title="Delete PDF" style="display:none">✕</button>
+      </div>
     </div>
 
     <div class="field">
@@ -201,10 +210,29 @@ PAGE = """<!DOCTYPE html>
 </div>
 
 <script>
-// Filename display
+function setFilename(name) {
+  const text = document.getElementById('filename-text');
+  const btn  = document.getElementById('delete-pdf-btn');
+  text.textContent = name || '';
+  btn.style.display = name ? 'inline' : 'none';
+}
+
+// On load: show any PDF already in samples/
+fetch('/current-pdf').then(r => r.json()).then(d => { if (d.name) setFilename(d.name); });
+
+// Filename display on new upload
 document.getElementById('pdf-input').addEventListener('change', function() {
-  document.getElementById('filename-display').textContent =
-    this.files[0] ? this.files[0].name : '';
+  setFilename(this.files[0] ? this.files[0].name : '');
+});
+
+// Delete button
+document.getElementById('delete-pdf-btn').addEventListener('click', function() {
+  fetch('/delete-pdf', { method: 'POST' }).then(r => {
+    if (r.ok) {
+      setFilename('');
+      document.getElementById('pdf-input').value = '';
+    }
+  });
 });
 
 // Toggle label
@@ -331,7 +359,6 @@ def run():
         proc1.wait()
         if proc1.returncode != 0:
             yield f"\n[ERROR] Parser exited with code {proc1.returncode}\n"
-            pdf_path.unlink(missing_ok=True)
             return
 
         # Step 2 — YachtIQ filler
@@ -352,20 +379,34 @@ def run():
         for line in proc2.stdout:
             yield line
             if "=== BROWSER OPEN" in line:
-                pdf_path.unlink(missing_ok=True)
                 yield "\nLog complete. Review the YachtIQ page, save, then close it.\n"
                 return
 
         proc2.wait()
         if proc2.returncode != 0:
             yield f"\n[ERROR] YachtIQ filler exited with code {proc2.returncode}\n"
-            pdf_path.unlink(missing_ok=True)
             return
 
-        pdf_path.unlink(missing_ok=True)
         yield "\nDone.\n"
 
     return Response(generate(), mimetype="text/plain")
+
+
+@app.route("/current-pdf")
+def current_pdf():
+    pdfs = sorted(
+        [p for p in SAMPLES_DIR.iterdir() if p.is_file() and p.suffix.lower() == ".pdf"],
+        key=lambda p: p.stat().st_mtime, reverse=True,
+    )
+    return {"name": pdfs[0].name if pdfs else None}
+
+
+@app.route("/delete-pdf", methods=["POST"])
+def delete_pdf():
+    pdfs = [p for p in SAMPLES_DIR.iterdir() if p.is_file() and p.suffix.lower() == ".pdf"]
+    for p in pdfs:
+        p.unlink(missing_ok=True)
+    return Response("", status=204)
 
 
 # ---------------------------------------------------------------------------
