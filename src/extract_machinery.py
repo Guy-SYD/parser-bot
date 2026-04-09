@@ -475,11 +475,11 @@ def extract_machinery_from_lines(lines: list[str]) -> dict:
 
     return results
 MACHINERY_FIELD_ALIASES = {
-    "STABILIZER_MANUFACTURER": [
-        "stabilizer manufacturer",
-        "stabiliser manufacturer",
+    "STABILIZER": [
         "stabilizers",
         "stabilisers",
+        "stabilizer",
+        "stabiliser",
         "fins",
     ],
     "STABILIZER_TYPE": [
@@ -540,10 +540,13 @@ def line_contains_alias(text: str, aliases: list[str]) -> bool:
 
 
 def extract_full_line_for_alias(lines, aliases: list[str]) -> str:
+    sorted_aliases = sorted(aliases, key=len, reverse=True)
     for line in lines:
         text = line.get("text", "") if isinstance(line, dict) else str(line)
-        if line_contains_alias(text, aliases):
-            return text.strip()
+        for alias in sorted_aliases:
+            value = extract_after_label(text, alias)
+            if value:
+                return value
     return ""
 
 
@@ -1158,11 +1161,10 @@ def extract_machinery_fields_from_lines(lines: list[str]) -> dict:
         if context_speed:
             results["STABILIZER_SPEED"] = context_speed
 
-
-        results["BOW_THRUSTER"] = extract_full_line_for_alias(
-            lines,
-            ["bow thruster", "bowthruster"]
-        ) or results.get("BOW_THRUSTER", "")
+    results["BOW_THRUSTER"] = extract_full_line_for_alias(
+        lines,
+        ["bow thruster", "bowthruster"]
+    ) or results.get("BOW_THRUSTER", "")
 
     results["STERN_THRUSTER"] = extract_full_line_for_alias(
             lines,
