@@ -92,9 +92,16 @@ def _apply_extractor_results(yacht: YachtData, results: dict, page_num: int, sou
             continue  # field not in schema yet — silently skip (schema is still growing)
 
         existing = getattr(yacht, key)
-        if existing:
-            # Already have a value from an earlier page or extractor.
-            # Log it if different so we can audit surprises.
+        if isinstance(existing, list):
+            # List fields (e.g. *_BULLETS): merge across pages, deduplicate
+            if isinstance(value, list):
+                merged = list(existing)
+                for item in value:
+                    if item not in merged:
+                        merged.append(item)
+                setattr(yacht, key, merged)
+        elif existing:
+            # Scalar: first non-empty value wins; log if a different value was seen
             if str(existing).strip() != str(value).strip():
                 conflicts.append(
                     f"  p{page_num} [{source}] {key}: kept '{existing}', ignored '{value}'"

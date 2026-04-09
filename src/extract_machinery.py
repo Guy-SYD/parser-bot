@@ -993,8 +993,17 @@ def fill_other_machinery_grouped(section, items, page):
     section.locator("[data-testid='texteditor-toolbar-save-button']").first.click()
 
 def line_matches_any_alias(text: str, aliases: list[str]) -> bool:
+    """
+    Match lines where one of the aliases appears as a LABEL — i.e. at the
+    start of the line, optionally followed by a colon, dash, or end-of-string.
+    This prevents short words like 'head' matching narrative sentences.
+    """
     normalized = normalize_section_text(text)
-    return any(normalize_section_text(alias) in normalized for alias in aliases)
+    for alias in aliases:
+        a = re.escape(normalize_section_text(alias))
+        if re.match(rf'^{a}(\s*[:\-/]|\s*$|\s+\w)', normalized):
+            return True
+    return False
 
 
 def extract_other_machinery_grouped(lines) -> list[str]:

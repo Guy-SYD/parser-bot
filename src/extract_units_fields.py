@@ -318,28 +318,29 @@ def parse_speed_line(line: str) -> dict:
     if "speed" not in lower and "kn" not in lower and "knot" not in lower:
         return results
 
-    max_match = re.search(r"(?:max|maximum)\s*(\d+(?:\.\d+)?)", line, flags=re.IGNORECASE)
+    # (?!,) prevents matching the "5" in "cruising 5,200 nm" (thousands separator)
+    max_match = re.search(r"(?:max|maximum)\s*(\d+(?:\.\d+)?)(?!,)", line, flags=re.IGNORECASE)
     if max_match:
         results["MAX_SPEED"] = max_match.group(1)
 
-    cruise_match = re.search(r"(?:cruise|cruising)\s*(\d+(?:\.\d+)?)", line, flags=re.IGNORECASE)
+    cruise_match = re.search(r"(?:cruise|cruising)\s*(\d+(?:\.\d+)?)(?!,)", line, flags=re.IGNORECASE)
     if cruise_match:
         results["CRUISE_SPEED"] = cruise_match.group(1)
 
-    eco_match = re.search(r"(?:economical|economic|eco|economy)\s*(\d+(?:\.\d+)?)", line, flags=re.IGNORECASE)
+    eco_match = re.search(r"(?:economical|economic|eco|economy)\s*(\d+(?:\.\d+)?)(?!,)", line, flags=re.IGNORECASE)
     if eco_match:
         results["ECONOMICAL_SPEED"] = eco_match.group(1)
 
     # handles: "15 Max 12 Cruising 11 Economical"
-    reverse_max = re.search(r"(\d+(?:\.\d+)?)\s*(?:max|maximum)", line, flags=re.IGNORECASE)
+    reverse_max = re.search(r"(\d+(?:\.\d+)?)(?!,)\s*(?:max|maximum)", line, flags=re.IGNORECASE)
     if reverse_max and "MAX_SPEED" not in results:
         results["MAX_SPEED"] = reverse_max.group(1)
 
-    reverse_cruise = re.search(r"(\d+(?:\.\d+)?)\s*(?:cruise|cruising)", line, flags=re.IGNORECASE)
+    reverse_cruise = re.search(r"(\d+(?:\.\d+)?)(?!,)\s*(?:cruise|cruising)", line, flags=re.IGNORECASE)
     if reverse_cruise and "CRUISE_SPEED" not in results:
         results["CRUISE_SPEED"] = reverse_cruise.group(1)
 
-    reverse_eco = re.search(r"(\d+(?:\.\d+)?)\s*(?:economical|economic|eco|economy)", line, flags=re.IGNORECASE)
+    reverse_eco = re.search(r"(\d+(?:\.\d+)?)(?!,)\s*(?:economical|economic|eco|economy)", line, flags=re.IGNORECASE)
     if reverse_eco and "ECONOMICAL_SPEED" not in results:
         results["ECONOMICAL_SPEED"] = reverse_eco.group(1)
 
