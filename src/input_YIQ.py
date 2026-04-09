@@ -778,17 +778,33 @@ def write_equipment_content(panel, page, structured: list[tuple[str, list[str]]]
     editor.click(force=True)
     page.wait_for_timeout(150)
 
-    # Clear existing content + strip any residual list/bullet formatting
+    # Clear existing content
     page.keyboard.press("Control+A")
-    page.keyboard.press("Backspace")
     page.keyboard.press("Backspace")
     page.wait_for_timeout(100)
 
+    # Reset any active formatting (bold, italic, list) the editor may have retained
+    # after clearing — click any active toolbar formatting buttons to deactivate them
+    page.evaluate("""() => {
+        document.querySelectorAll(
+            '[data-testid*="toolbar"] button, .toolbar-item'
+        ).forEach(btn => {
+            if (
+                btn.classList.contains('active') ||
+                btn.getAttribute('aria-pressed') === 'true' ||
+                btn.getAttribute('aria-checked') === 'true'
+            ) { btn.click(); }
+        });
+    }""")
+    page.wait_for_timeout(50)
+
     for i, (kind, text) in enumerate(output_lines):
-        if kind == "bullet":
-            page.keyboard.insert_text("• " + text)
-        else:
+        if kind == "header":
+            page.keyboard.press("Control+b")
             page.keyboard.insert_text(text)
+            page.keyboard.press("Control+b")
+        else:
+            page.keyboard.insert_text("• " + text)
         if i < len(output_lines) - 1:
             page.keyboard.press("Enter")
 
