@@ -683,6 +683,18 @@ _QTY_PREFIX = re.compile(r'^(\d+)\s*[xX]\s+(?!\d)', re.IGNORECASE)
 _QTY_SUFFIX = re.compile(r'^(.*?)\s+[xX]\s*(\d+)\s*$', re.IGNORECASE)
 
 
+def _sanitize_text(text: str) -> str:
+    """
+    Strip characters that can't be encoded by Windows cp1252 console or that
+    come from symbol/Wingdings fonts in PDFs (Private Use Area: U+E000–U+F8FF).
+    Also collapses any double-spaces left behind.
+    """
+    cleaned = "".join(ch for ch in text if not (0xE000 <= ord(ch) <= 0xF8FF))
+    import re as _re
+    cleaned = _re.sub(r"  +", " ", cleaned).strip()
+    return cleaned
+
+
 def _normalize_quantity(line: str) -> str:
     """
     Normalize quantity expressions:
@@ -764,9 +776,11 @@ def write_equipment_content(panel, page, structured: list[tuple[str, list[str]]]
     output_lines: list[tuple[str, str]] = []
     for cat_name, lines in structured:
         if cat_name:
+            cat_name = _sanitize_text(cat_name)
             print(f"    [H] {cat_name}")
             output_lines.append(("header", cat_name))
         for line in _join_wrapped_lines(lines):
+            line = _sanitize_text(line)
             line = _strip_category_prefix(line, cat_name)
             line = _normalize_quantity(line)
             print(f"    [ ] {line[:90]}")
@@ -1879,47 +1893,41 @@ with sync_playwright() as p:
 
         # Stabilizer
     if any_value(STABILIZER, STABILIZER_TYPE, STABILIZER_SPEED):
-        stabilizer_section = page.locator(
-            "xpath=//h3[contains(normalize-space(.), 'Stabilizer')]/ancestor::div[contains(@class,'border-t')][1]"
-        ).first
+        if has_value(STABILIZER):
+            stabilizer_block = get_card_by_any_label_text(page, [
+                "stabilizer make / model",
+                "stabilizer make/model",
+                "stabilisers",
+                "stabilizers",
+                "stabilizer",
+                "stabiliser",
+                "make / model",
+            ])
+            if stabilizer_block is None:
+                print("[MISS] Stabilizer: field card not found — searched for 'stabilizer make/model', 'stabilizers', 'make / model'")
+            else:
+                fill_if_present(stabilizer_block.locator("input").first, STABILIZER)
+                print(f"  [OK] Stabilizer: {STABILIZER[:60]}")
 
-        if stabilizer_section.count() == 0:
-            print("[MISS] Stabilizer section not found")
-        else:
-            if has_value(STABILIZER):
-                stabilizer_block = get_card_by_label_text(stabilizer_section, "stabilizer")
-                if stabilizer_block is None:
-                    stabilizer_block = get_card_by_label_text(stabilizer_section, "make / model")
-                if stabilizer_block is None:
-                    print("[MISS] Stabilizer make/model: card not found")
-                else:
-                    fill_if_present(stabilizer_block.locator("input").first, STABILIZER)
+        if has_value(STABILIZER_TYPE):
+            type_block = get_card_by_any_label_text(page, ["stabilizer type", "stabiliser type", "type"])
+            if type_block is None:
+                print("[MISS] Stabilizer Type: field card not found")
+            else:
+                select_dropdown_by_typing(
+                    type_block.locator("div.ant-select").first,
+                    STABILIZER_TYPE, page, field_name="Stabilizer Type"
+                )
 
-            if has_value(STABILIZER_TYPE):
-                type_block = get_card_by_label_text(stabilizer_section, "type")
-                if type_block is None:
-                    print("[MISS] Stabilizer Type: card not found")
-                else:
-                    type_dropdown = type_block.locator("div.ant-select").first
-                    select_dropdown_by_typing(
-                        type_dropdown,
-                        STABILIZER_TYPE,
-                        page,
-                        field_name="Stabilizer Type"
-                    )
-
-            if has_value(STABILIZER_SPEED):
-                speed_block = get_card_by_label_text(stabilizer_section, "speed")
-                if speed_block is None:
-                    print("[MISS] Stabilizer Speed: card not found")
-                else:
-                    speed_dropdown = speed_block.locator("div.ant-select").first
-                    select_dropdown_by_typing(
-                        speed_dropdown,
-                        STABILIZER_SPEED,
-                        page,
-                        field_name="Stabilizer Speed"
-                    )
+        if has_value(STABILIZER_SPEED):
+            speed_block = get_card_by_any_label_text(page, ["stabilizer speed", "stabiliser speed", "zero speed", "speed"])
+            if speed_block is None:
+                print("[MISS] Stabilizer Speed: field card not found")
+            else:
+                select_dropdown_by_typing(
+                    speed_block.locator("div.ant-select").first,
+                    STABILIZER_SPEED, page, field_name="Stabilizer Speed"
+                )
 
 
 
