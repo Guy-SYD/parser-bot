@@ -1261,19 +1261,15 @@ with sync_playwright() as p:
             f"Delete auth/state.json and re-run to force a fresh login."
         )
 
-    # Edit — try several selectors in order of specificity
+    # Edit — the edit (pencil) button has these exact classes:
+    #   ant-btn-default + ant-btn-variant-outlined + ant-btn-icon-only
+    # The bronze "Spec Sheet" button is ant-btn-primary so it won't match.
     def _click_edit_button(page) -> bool:
         candidates = [
-            # Explicit edit/pencil aria label
-            "button[aria-label='edit']",
-            "button[aria-label='Edit']",
-            # Ant Design icon button containing an SVG edit/pencil icon
-            "button.ant-btn-icon-only:has(span[aria-label='edit'])",
-            "button.ant-btn-icon-only:has(span[aria-label='form'])",
-            # Icon-only button that is NOT the bronze dropdown trigger
-            "button.ant-btn-icon-only:not(.bg-bronze):not(.ant-dropdown-trigger)",
-            # Fallback: any visible icon-only button
-            "button.ant-btn-icon-only",
+            # Most specific: outlined default icon-only (the pencil edit button)
+            "button.ant-btn-default.ant-btn-variant-outlined.ant-btn-icon-only",
+            # Fallback: any icon-only that isn't the primary/bronze dropdown
+            "button.ant-btn-icon-only:not(.ant-btn-primary):not(.bg-bronze):not(.ant-dropdown-trigger)",
         ]
         for sel in candidates:
             try:

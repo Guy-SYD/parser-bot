@@ -345,6 +345,67 @@ _SECTION_MAP: dict[str, tuple] = {
 }
 
 
+# ---------------------------------------------------------------------------
+# Cross-section routing rules
+# Lines in a source section that match ANY keyword here are moved to the
+# target section instead. Applied before per-section categorization.
+# Format: (source_section, target_section, [keywords])
+# ---------------------------------------------------------------------------
+_CROSS_ROUTE_RULES: list[tuple[str, str, list[str]]] = [
+    # Comms items that land in nav sections (main helm, electronics & nav)
+    ("NAVIGATION EQUIPMENT", "COMMUNICATION EQUIPMENT", [
+        "vhf", "ssb", "satcom", "sat com", "gmdss", "iridium", "starlink",
+        "thrane", "vsat", "felcom", "uhf", "mf/hf", "hf radio", "navtex",
+        "telephone", "intercom", "pbx", "wifi", "wi-fi", "internet", "4g", "5g",
+        "lte", "gsm", "cellular", "voip", "radio", "sailor rt", "simrad rs",
+        "sailor 5000", "kvh u7", "kvh u",
+    ]),
+    # Entertainment items that land in nav sections (TV at helm, sound system)
+    ("NAVIGATION EQUIPMENT", "ENTERTAINMENT EQUIPMENT", [
+        " tv ", "television", " screen", "dvd", "blu-ray", "bluray",
+        "satellite tv", "apple tv", "sonos", "speaker", "audio",
+        "fusion msnrx", "fusion ms",
+    ]),
+    # Safety items that land in deck sections
+    ("DECK EQUIPMENT", "SAFETY & SECURITY EQUIPMENT", [
+        "life raft", "liferaft", "epirb", "sart", "flare", "lifejacket",
+        "life jacket", "lifebuoy", "life ring", "fire extinguisher",
+        "extinguisher", "immersion suit", "survival suit", "smoke alarm",
+        "fire alarm", "fire suppression", "co2", "fire hose",
+    ]),
+    # Entertainment items in deck sections
+    ("DECK EQUIPMENT", "ENTERTAINMENT EQUIPMENT", [
+        " tv", "television", "flat screen", "led tv", "plasma",
+        "speaker", "surround sound", "bose", "sound system",
+    ]),
+]
+
+
+def _apply_cross_routing(sections: dict[str, list[str]]) -> dict[str, list[str]]:
+    """
+    Move lines between section buckets before per-section categorization,
+    based on keyword matching. Modifies a copy of the sections dict.
+    """
+    # Work on copies so we don't mutate the input
+    result = {k: list(v) for k, v in sections.items()}
+
+    for src_key, dst_key, keywords in _CROSS_ROUTE_RULES:
+        if src_key not in result:
+            continue
+        stay, move = [], []
+        for line in result[src_key]:
+            lower = line.lower()
+            if any(kw in lower for kw in keywords):
+                move.append(line)
+            else:
+                stay.append(line)
+        if move:
+            result[src_key] = stay
+            result.setdefault(dst_key, []).extend(move)
+
+    return result
+
+
 def categorize_sections(
     sections: dict[str, list[str]],
 ) -> dict[str, list[tuple[str, list[str]]]]:
@@ -354,6 +415,9 @@ def categorize_sections(
 
     Sections not in _SECTION_MAP are passed through with an empty category name.
     """
+    # Route lines to their correct section before categorizing
+    sections = _apply_cross_routing(sections)
+
     result: dict[str, list[tuple[str, list[str]]]] = {}
 
     for key, lines in sections.items():
