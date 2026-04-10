@@ -318,7 +318,7 @@ def any_value(*values) -> bool:
 def clear_and_fill_input(input_locator, value):
     if not has_value(value):
         return
-    input_locator.click(force=True)
+    input_locator.click(force=True, timeout=5000)
     input_locator.press("Control+A")
     input_locator.press("Backspace")
     input_locator.fill(str(value))
@@ -479,12 +479,12 @@ def select_dropdown_by_typing(
     value = str(value).strip()
 
     try:
-        dropdown_locator.click(force=True)
+        dropdown_locator.click(force=True, timeout=5000)
         page.wait_for_timeout(200)
 
         search_input = dropdown_locator.locator("input.ant-select-selection-search-input").first
         try:
-            search_input.click(force=True)
+            search_input.click(force=True, timeout=3000)
         except Exception:
             pass
 
@@ -572,7 +572,7 @@ def select_autocomplete_by_name(
 
 
 def select_dropdown_arrow_once(dropdown_locator, page):
-    dropdown_locator.click(force=True)
+    dropdown_locator.click(force=True, timeout=5000)
     page.wait_for_timeout(100)
     page.keyboard.press("ArrowDown")
     page.wait_for_timeout(100)
@@ -794,7 +794,7 @@ def write_equipment_content(panel, page, structured: list[tuple[str, list[str]]]
         return
 
     editor = panel.locator("[contenteditable='true']").first
-    editor.click(force=True)
+    editor.click(force=True, timeout=8000)
     page.wait_for_timeout(150)
 
     # Clear editor content via JS — avoids Ctrl+A selecting the whole page
@@ -821,9 +821,9 @@ def fill_richtext_bullets(section, bullets, page):
         return
 
     editor = section.locator("[data-testid*='texteditor-contenteditable']").first
-    editor.click(force=True)
+    editor.click(force=True, timeout=8000)
 
-    section.locator("[data-testid='toolbar-list-ul']").first.click()
+    section.locator("[data-testid='toolbar-list-ul']").first.click(timeout=5000)
 
     # clear existing content
     page.keyboard.press("Control+A")
@@ -2067,7 +2067,7 @@ with sync_playwright() as p:
             ).first
 
             editor = section.locator(f"[data-testid='{testid}']").first
-            editor.click(force=True)
+            editor.click(force=True, timeout=8000)
             page.wait_for_timeout(150)
 
             # Clear via JS — avoids Ctrl+A selecting the whole page
