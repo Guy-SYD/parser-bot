@@ -207,6 +207,63 @@ PAGE = """<!DOCTYPE html>
   }
   .done-msg.success { background: #f5f0ec; color: #785f47; }
   .done-msg.error   { background: #fdecea; color: #9b2335; }
+
+  /* Feedback button */
+  .feedback-btn {
+    display: none; width: 100%; margin-top: 12px; padding: 10px;
+    background: #fff7ed; color: #b45309; border: 1.5px solid #f59e0b;
+    border-radius: 7px; font-size: .9rem; font-weight: 600;
+    cursor: pointer; transition: background .2s;
+  }
+  .feedback-btn:hover { background: #fef3c7; }
+  .feedback-btn.visible { display: block; }
+
+  /* Feedback modal */
+  .modal-overlay {
+    display: none; position: fixed; inset: 0;
+    background: rgba(0,0,0,.45); z-index: 100;
+    justify-content: center; align-items: flex-start; padding: 40px 16px;
+  }
+  .modal-overlay.open { display: flex; }
+  .modal {
+    background: #fff; border-radius: 12px; padding: 32px;
+    width: 100%; max-width: 680px; max-height: 80vh;
+    overflow-y: auto; box-shadow: 0 8px 40px rgba(0,0,0,.18);
+  }
+  .modal h2 { font-size: 1.1rem; font-weight: 700; margin-bottom: 4px; }
+  .modal .modal-sub { font-size: .82rem; color: #888; margin-bottom: 20px; }
+  .feedback-item {
+    border: 1px solid #eee; border-radius: 8px; padding: 14px 16px;
+    margin-bottom: 14px; background: #fafafa;
+  }
+  .feedback-item .fi-text {
+    font-size: .88rem; font-family: monospace; color: #333;
+    margin-bottom: 4px; word-break: break-word;
+  }
+  .feedback-item .fi-source {
+    font-size: .75rem; color: #aaa; margin-bottom: 10px;
+  }
+  .feedback-item .fi-controls {
+    display: flex; gap: 8px; flex-wrap: wrap; align-items: center;
+  }
+  .fi-controls select {
+    padding: 5px 8px; border: 1px solid #ddd; border-radius: 6px;
+    font-size: .82rem; color: #333; flex: 1; min-width: 140px;
+  }
+  .fi-btn {
+    padding: 5px 12px; border-radius: 6px; font-size: .82rem;
+    font-weight: 600; border: none; cursor: pointer; transition: background .2s;
+  }
+  .fi-btn.correct { background: #785f47; color: #fff; }
+  .fi-btn.correct:hover { background: #6a5240; }
+  .fi-btn.discard { background: #f5f5f5; color: #888; }
+  .fi-btn.discard:hover { background: #e8e8e8; color: #555; }
+  .modal-close {
+    float: right; background: none; border: none; font-size: 1.4rem;
+    cursor: pointer; color: #aaa; line-height: 1;
+  }
+  .modal-close:hover { color: #333; }
+  .modal-done { font-size: .9rem; color: #785f47; font-weight: 600; display: none; }
 </style>
 </head>
 <body>
@@ -252,6 +309,18 @@ PAGE = """<!DOCTYPE html>
     <h2>Output</h2>
     <div id="log"></div>
     <div class="done-msg" id="done-msg"></div>
+  </div>
+  <button type="button" class="feedback-btn" id="feedback-btn"></button>
+</div>
+
+<!-- Feedback review modal -->
+<div class="modal-overlay" id="feedback-modal">
+  <div class="modal">
+    <button class="modal-close" id="modal-close">&times;</button>
+    <h2>Review Uncategorised Items</h2>
+    <p class="modal-sub">These items landed in "Other" — assign each to the correct bucket and subcategory, or discard if not equipment.</p>
+    <div id="feedback-list"></div>
+    <p class="modal-done" id="modal-done">All items reviewed. The prompt will improve automatically next run.</p>
   </div>
 </div>
 
@@ -407,6 +476,122 @@ document.getElementById('run-form').addEventListener('submit', async function(e)
       : 'Pipeline finished with errors \u2014 check the log above.';
   }
 });
+
+// ── Feedback review ──────────────────────────────────────────────────────────
+
+const BUCKETS = {
+  "GALLEY & LAUNDRY EQUIPMENT":   ["Galley","Pantry","Laundry","Crew Galley","Other"],
+  "COMMUNICATION EQUIPMENT":      ["STARLINK","VSAT","SATCOM A","SAT-C","Iridium Satellite Phone","VHF","Portable VHF","VHF Radiotelephones","SSB","GMDSS","Navtex","Telephone System","Intercom","Guest Phones","GSM","Radio","Other"],
+  "NAVIGATION EQUIPMENT":         ["Radar","MFD","Chart Plotter","GPS","AIS","ECDIS","Gyrocompass","Auto Pilot","Echo Sounder","Log","Wind Instruments","Magnetic Compass","Navtex","Weather Fax","FLIR","Search Lights","Rudder Angle Indicator","Ships Computer","Alarm","Horn","UPS","Other"],
+  "ENTERTAINMENT EQUIPMENT":      ["WiFi","Audiovisual","HiFi","Control Systems","Other"],
+  "TENDERS & TOYS":               ["Tenders","Jetskis","Diving","Toys","Other"],
+  "DECK EQUIPMENT":               ["Anchor","Windlasses & Capstans","Crane","Passerelle","Lighting","Swimming & Water Features","Other"],
+  "SAFETY & SECURITY EQUIPMENT":  ["Fixed Firefighting System","Firefighting Equipment","Gas Detection","Smoke Detection","Fire Alarm","MOB Boat","Life Rafts","Breathing Apparatus","Lifejackets","Immersion Suits","Life Rings","EPIRB","SART","Flares And Signals","Medical Equipment","CCTV","Monitors","Ship's Safe","Doorbell","Other"],
+};
+
+const feedbackBtn  = document.getElementById('feedback-btn');
+const modal        = document.getElementById('feedback-modal');
+const modalClose   = document.getElementById('modal-close');
+const feedbackList = document.getElementById('feedback-list');
+const modalDone    = document.getElementById('modal-done');
+
+async function loadFeedback() {
+  const res = await fetch('/feedback/pending');
+  const items = await res.json();
+  feedbackBtn.textContent = items.length + ' item' + (items.length !== 1 ? 's' : '') + ' to review';
+  feedbackBtn.classList.toggle('visible', items.length > 0);
+  return items;
+}
+
+feedbackBtn.addEventListener('click', async () => {
+  const items = await loadFeedback();
+  feedbackList.innerHTML = '';
+  modalDone.style.display = 'none';
+
+  if (items.length === 0) {
+    modalDone.style.display = 'block';
+    modal.classList.add('open');
+    return;
+  }
+
+  items.forEach(item => {
+    const div = document.createElement('div');
+    div.className = 'feedback-item';
+    div.dataset.id = item.id;
+
+    // Bucket select
+    let bucketOpts = Object.keys(BUCKETS).map(b =>
+      `<option value="${b}" ${b === item.bucket ? 'selected' : ''}>${b}</option>`
+    ).join('');
+
+    // Subcategory select — starts with subcats for current bucket
+    let subcatOpts = (BUCKETS[item.bucket] || []).map(s =>
+      `<option value="${s}">` + s + `</option>`
+    ).join('');
+
+    div.innerHTML = `
+      <div class="fi-text">${item.item}</div>
+      <div class="fi-source">From: ${item.bucket} &bull; PDF: ${item.pdf}</div>
+      <div class="fi-controls">
+        <select class="bucket-sel">${bucketOpts}</select>
+        <select class="subcat-sel">${subcatOpts}</select>
+        <button class="fi-btn correct">Save</button>
+        <button class="fi-btn discard">Not equipment</button>
+      </div>`;
+
+    // Update subcats when bucket changes
+    div.querySelector('.bucket-sel').addEventListener('change', function() {
+      const subcats = BUCKETS[this.value] || [];
+      div.querySelector('.subcat-sel').innerHTML = subcats.map(s =>
+        `<option value="${s}">${s}</option>`).join('');
+    });
+
+    div.querySelector('.fi-btn.correct').addEventListener('click', async () => {
+      const bucket = div.querySelector('.bucket-sel').value;
+      const subcat = div.querySelector('.subcat-sel').value;
+      await fetch('/feedback/confirm', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({id: item.id, bucket, subcategory: subcat}),
+      });
+      div.style.opacity = '.3';
+      div.style.pointerEvents = 'none';
+      checkAllDone();
+    });
+
+    div.querySelector('.fi-btn.discard').addEventListener('click', async () => {
+      await fetch('/feedback/discard', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({id: item.id}),
+      });
+      div.style.opacity = '.3';
+      div.style.pointerEvents = 'none';
+      checkAllDone();
+    });
+
+    feedbackList.appendChild(div);
+  });
+
+  modal.classList.add('open');
+});
+
+function checkAllDone() {
+  const active = feedbackList.querySelectorAll('.feedback-item:not([style*="opacity"])');
+  if (active.length === 0) {
+    modalDone.style.display = 'block';
+    loadFeedback();
+  }
+}
+
+modalClose.addEventListener('click', () => modal.classList.remove('open'));
+modal.addEventListener('click', e => { if (e.target === modal) modal.classList.remove('open'); });
+
+// Check for pending items on page load and after each run
+loadFeedback();
+document.getElementById('run-form').addEventListener('submit', () => {
+  setTimeout(loadFeedback, 5000);
+});
 </script>
 </body>
 </html>
@@ -519,6 +704,52 @@ def delete_pdf():
     for p in SAMPLES_DIR.glob("*.pdf"):
         p.unlink(missing_ok=True)
     return Response("", status=204)
+
+
+@app.route("/feedback/pending")
+def feedback_pending():
+    sys.path.insert(0, str(BASE_DIR / "src"))
+    from feedback import get_pending
+    return get_pending()
+
+
+@app.route("/feedback/confirm", methods=["POST"])
+def feedback_confirm():
+    sys.path.insert(0, str(BASE_DIR / "src"))
+    from feedback import confirm_item
+    data = request.get_json()
+    ok = confirm_item(data["id"], data["bucket"], data["subcategory"])
+    _maybe_update_prompt()
+    return {"ok": ok}
+
+
+@app.route("/feedback/discard", methods=["POST"])
+def feedback_discard():
+    sys.path.insert(0, str(BASE_DIR / "src"))
+    from feedback import discard_item
+    data = request.get_json()
+    ok = discard_item(data["id"])
+    _maybe_update_prompt()
+    return {"ok": ok}
+
+
+def _maybe_update_prompt():
+    """Auto-update the prompt when 5+ new confirmed examples have accumulated."""
+    try:
+        sys.path.insert(0, str(BASE_DIR / "src"))
+        from feedback import get_confirmed_unsynced
+        unsynced = get_confirmed_unsynced()
+        if len(unsynced) >= 5:
+            script = BASE_DIR / "scripts" / "update_prompt.py"
+            if script.exists():
+                subprocess.Popen(
+                    [PYTHON, str(script)],
+                    cwd=str(BASE_DIR),
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                )
+    except Exception:
+        pass
 
 
 # ---------------------------------------------------------------------------

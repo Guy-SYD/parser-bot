@@ -3,6 +3,7 @@ from difflib import SequenceMatcher
 import sys as _sys
 _sys.path.insert(0, str(__import__('pathlib').Path(__file__).resolve().parent))
 from categorize_sections import categorize_sections as _categorize_sections
+from api_categorise import categorise_with_fallback as _categorise_with_fallback
 
 # ---------------------------
 # INPUTS
@@ -2031,47 +2032,50 @@ with sync_playwright() as p:
                 field_name=label_text.title(),
             )
 
-    # Richtext sections
-    richtext_sections = [
-        ("Electricity", "texteditor-contenteditable-electricity", ELECTRICITY_BULLETS),
-        ("Batteries", "texteditor-contenteditable-batteries", BATTERIES_BULLETS),
-        ("Battery Chargers", "texteditor-contenteditable-batteryChargers", BATTERY_CHARGERS_BULLETS),
-        ("Air Conditioning", "texteditor-contenteditable-airconditioning", AIR_CONDITIONING_BULLETS),
-    ]
+    if getattr(args, 'no_equipment', False):
+        print("\n--- Machinery free-text sections skipped (equipment unticked) ---")
+    else:
+        # Richtext sections
+        richtext_sections = [
+            ("Electricity", "texteditor-contenteditable-electricity", ELECTRICITY_BULLETS),
+            ("Batteries", "texteditor-contenteditable-batteries", BATTERIES_BULLETS),
+            ("Battery Chargers", "texteditor-contenteditable-batteryChargers", BATTERY_CHARGERS_BULLETS),
+            ("Air Conditioning", "texteditor-contenteditable-airconditioning", AIR_CONDITIONING_BULLETS),
+        ]
 
-    other_machinery_section = None
+        other_machinery_section = None
 
-    for heading, testid, bullets in richtext_sections:
-        if not has_value(bullets):
+        for heading, testid, bullets in richtext_sections:
+            if not has_value(bullets):
+                if heading == "Other Machinery":
+                    other_machinery_section = page.locator("div.border-t.border-gray15.pt-8.pb-12").filter(
+                        has=page.locator("h3", has_text=heading)
+                    ).first
+                continue
+
+            section = page.locator("div.border-t.border-gray15.pt-8.pb-12").filter(
+                has=page.locator("h3", has_text=heading)
+            ).first
+
+            editor = section.locator(f"[data-testid='{testid}']").first
+            editor.click(force=True)
+            page.wait_for_timeout(150)
+
+            # Clear via JS — avoids Ctrl+A selecting the whole page
+            editor.evaluate("el => { el.innerHTML = ''; el.focus(); }")
+            page.wait_for_timeout(100)
+
+            valid_bullets = [str(b) for b in bullets if has_value(b)]
+            for i, item in enumerate(valid_bullets):
+                page.keyboard.insert_text(item)
+                if i < len(valid_bullets) - 1:
+                    page.keyboard.press("Enter")
+
+            page.wait_for_timeout(200)
+            section.locator("[data-testid='texteditor-toolbar-save-button']").first.click()
+
             if heading == "Other Machinery":
-                other_machinery_section = page.locator("div.border-t.border-gray15.pt-8.pb-12").filter(
-                    has=page.locator("h3", has_text=heading)
-                ).first
-            continue
-
-        section = page.locator("div.border-t.border-gray15.pt-8.pb-12").filter(
-            has=page.locator("h3", has_text=heading)
-        ).first
-
-        editor = section.locator(f"[data-testid='{testid}']").first
-        editor.click(force=True)
-        page.wait_for_timeout(150)
-
-        # Clear via JS — avoids Ctrl+A selecting the whole page
-        editor.evaluate("el => { el.innerHTML = ''; el.focus(); }")
-        page.wait_for_timeout(100)
-
-        valid_bullets = [str(b) for b in bullets if has_value(b)]
-        for i, item in enumerate(valid_bullets):
-            page.keyboard.insert_text(item)
-            if i < len(valid_bullets) - 1:
-                page.keyboard.press("Enter")
-
-        page.wait_for_timeout(200)
-        section.locator("[data-testid='texteditor-toolbar-save-button']").first.click()
-
-        if heading == "Other Machinery":
-            other_machinery_section = section
+                other_machinery_section = section
 
 
 
@@ -2089,7 +2093,9 @@ with sync_playwright() as p:
         }
 
         # Categorise raw lines into (category, [lines]) structure
-        _categorized = _categorize_sections(equipment_to_fill)
+        # Tries OpenAI API first; falls back to keyword matching if unavailable
+        _pdf_name = Path(INPUT_FILE).name if INPUT_FILE else ""
+        _categorized = _categorise_with_fallback(equipment_to_fill, pdf_name=_pdf_name)
 
         if equipment_to_fill:
             print("\n--- Equipment Tab ---")
