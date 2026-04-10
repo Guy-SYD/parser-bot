@@ -9,6 +9,7 @@ __pycache__/
 # Auth & credentials (never commit)
 Login.txt
 auth/state.json
+config/anthropic_key.txt
 
 # Output files
 output/result.json
