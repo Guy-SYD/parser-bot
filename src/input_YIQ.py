@@ -130,9 +130,12 @@ def do_login(page, context, target_url: str):
     except PlaywrightTimeoutError:
         print("WARNING: Could not confirm login completed — continuing anyway.")
 
-    page.wait_for_timeout(1500)
     page.goto(target_url, wait_until="load")
-    page.wait_for_timeout(2500)
+    # Wait for the page to be interactive (edit button or any ant-btn visible)
+    try:
+        page.wait_for_selector("button.ant-btn-icon-only", state="visible", timeout=12000)
+    except PlaywrightTimeoutError:
+        page.wait_for_timeout(1500)
 
     # Save the fresh session for next time
     AUTH_STATE.parent.mkdir(parents=True, exist_ok=True)
@@ -1247,10 +1250,16 @@ with sync_playwright() as p:
 
     page.goto(YACHT_URL, wait_until="load")
 
+    # Wait for either the edit button (logged in) or the login button — whichever
+    # appears first. This avoids waiting the full 15s timeout when a login is needed.
     try:
-        page.locator("button.ant-btn-icon-only").first.wait_for(state="visible", timeout=15000)
+        page.wait_for_selector(
+            "button.ant-btn-icon-only, #btn-login",
+            state="visible",
+            timeout=15000,
+        )
     except PlaywrightTimeoutError:
-        pass  # may be on login page — check below
+        pass  # continue and check below
 
     if is_on_login_page(page):
         do_login(page, context, YACHT_URL)
