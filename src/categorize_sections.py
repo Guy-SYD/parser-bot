@@ -415,6 +415,13 @@ _CROSS_ROUTE_RULES: list[tuple[str, str, list[str]]] = [
         " tv", "television", "flat screen", "led tv", "plasma",
         "speaker", "surround sound", "bose", "sound system",
     ]),
+    # Tenders/toys that land in deck sections
+    ("DECK EQUIPMENT", "TENDERS & TOYS", [
+        "tender", "dinghy", "jet ski", "jetski", "waverunner", "seabob",
+        "kayak", "paddleboard", "wakeboard", "water ski", "inflatable",
+        "zodiac", "williams", "novurania", "castoldi", "pirelli",
+        "garage tender", "limousine tender",
+    ]),
 ]
 
 

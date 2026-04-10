@@ -667,7 +667,9 @@ def normalize_stabilizer_speed(value: str) -> str:
     if "zero speed" in lower:
         return "At Anchor"
 
-    return clean_text(value)
+    # Value doesn't map to a valid dropdown option — discard rather than
+    # pass garbage text that causes a 30-second dropdown timeout
+    return ""
 
 def extract_stabilizer_speed_from_context(lines: list[str]) -> str:
     stabilizer_aliases = []

@@ -110,6 +110,9 @@ HEADING_TO_SUBTAB: dict[str, str | None] = {
     "domestic appliances and equipment & laundry":  "GALLEY & LAUNDRY EQUIPMENT",
     "domestic appliances":                          "GALLEY & LAUNDRY EQUIPMENT",
     "galley equipment":                             "GALLEY & LAUNDRY EQUIPMENT",
+    "galley & domestic equipment":                  "GALLEY & LAUNDRY EQUIPMENT",
+    "galley and domestic equipment":                "GALLEY & LAUNDRY EQUIPMENT",
+    "cooking equipment":                            "GALLEY & LAUNDRY EQUIPMENT",
     "crew galley":                                  "GALLEY & LAUNDRY EQUIPMENT",
     "galley":                                       "GALLEY & LAUNDRY EQUIPMENT",
 
@@ -153,7 +156,10 @@ HEADING_TO_SUBTAB: dict[str, str | None] = {
     "selection of water toys and tenders":          "TENDERS & TOYS",
     "tenders & watersports equipment":              "TENDERS & TOYS",
     "tenders and watersports equipment":            "TENDERS & TOYS",
+    "tenders & watersport equipment":               "TENDERS & TOYS",
+    "tenders and watersport equipment":             "TENDERS & TOYS",
     "watersports equipment":                        "TENDERS & TOYS",
+    "water sports":                                 "TENDERS & TOYS",
     "water sports equipment":                       "TENDERS & TOYS",
     "tenders & water toys":                         "TENDERS & TOYS",
     "tenders and water toys":                       "TENDERS & TOYS",
@@ -244,6 +250,10 @@ _SKIP_PATTERNS = [
     r"powered by tcpdf",
     r"adequacy, validity, reliability",
     r"\|\s*\d+\.\d+m\s*\|",   # page footer: "YACHT | 22.63m | Builder | Year"
+    r"^copy of\b",             # photo filenames: "Copy of Copy of DSC09248"
+    r"^dsc\d{4,}",             # camera filenames: "DSC09248"
+    r"^img_\d+",               # camera filenames: "IMG_1234"
+    r"^p\d{7,}",               # Panasonic camera: "P1234567"
     r"completeness or usefulness",
     r"yacht inventory, sales",
     r"subject to changes at any time",
